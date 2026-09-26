@@ -6,6 +6,8 @@ matches (plus a few wildcard surprises) with plain-English explanations, and get
 See [`BUILD_SPEC.md`](BUILD_SPEC.md) for the full architecture: tech stack, data model, job sources, and agent
 schedule.
 
+![Dashboard overview: search profile, CV score, and latest digest](docs/screenshot.png)
+
 ## Quickstart (local dev)
 
 Requires Node 20+ and Docker (for Postgres) — or point `DATABASE_URL` at any Postgres 14+ instance you already
