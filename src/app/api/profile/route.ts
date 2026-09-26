@@ -1,0 +1,41 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { db } from "@/lib/db";
+import { handle, requireUserId } from "@/lib/api";
+
+const profileSchema = z.object({
+  name: z.string().min(1).default("Default search"),
+  targetRoles: z.array(z.string()).default([]),
+  locations: z.array(z.string()).default([]),
+  remotePref: z.enum(["REMOTE", "HYBRID", "ON_SITE", "ANY"]).default("ANY"),
+  seniority: z
+    .enum(["INTERN", "JUNIOR", "MID", "SENIOR", "STAFF", "PRINCIPAL", "MANAGER", "DIRECTOR", "EXECUTIVE"])
+    .nullable()
+    .optional(),
+  salaryMin: z.number().int().nullable().optional(),
+  salaryMax: z.number().int().nullable().optional(),
+  salaryCurrency: z.string().nullable().optional(),
+  industries: z.array(z.string()).default([]),
+  languages: z.array(z.string()).default([]),
+  activeCvId: z.string().nullable().optional(),
+});
+
+export async function GET() {
+  return handle(async () => {
+    const userId = await requireUserId();
+    const profiles = await db.searchProfile.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+    });
+    return NextResponse.json({ profiles });
+  });
+}
+
+export async function POST(req: NextRequest) {
+  return handle(async () => {
+    const userId = await requireUserId();
+    const body = profileSchema.parse(await req.json());
+    const profile = await db.searchProfile.create({ data: { ...body, userId } });
+    return NextResponse.json({ profile }, { status: 201 });
+  });
+}

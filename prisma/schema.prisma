@@ -1,0 +1,313 @@
+// Prisma schema for the AI Job Finder
+// See BUILD_SPEC.md for the full data-model rationale.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  timezone     String   @default("UTC")
+  digestHour   Int      @default(7) // local hour (0-23) the daily digest is sent
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profiles SearchProfile[]
+  cvs      Cv[]
+  digests  DailyDigest[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Search profile — what the user is looking for
+// ---------------------------------------------------------------------------
+
+model SearchProfile {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name     String  @default("Default search")
+  isActive Boolean @default(true)
+
+  targetRoles String[] // e.g. ["Senior Backend Engineer", "Staff Engineer"]
+  locations   String[] // free-text regions/cities, e.g. ["Berlin", "Netherlands"]
+  remotePref  RemotePreference @default(ANY)
+
+  seniority      Seniority?
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String?    @default("USD")
+  industries     String[]
+  languages      String[] // spoken/working languages required or preferred
+
+  activeCvId String?
+  activeCv   Cv?     @relation("ProfileActiveCv", fields: [activeCvId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  matches       MatchScore[]
+  digestEntries DailyDigestEntry[]
+
+  @@index([userId])
+  @@map("search_profiles")
+}
+
+enum RemotePreference {
+  REMOTE
+  HYBRID
+  ON_SITE
+  ANY
+}
+
+enum Seniority {
+  INTERN
+  JUNIOR
+  MID
+  SENIOR
+  STAFF
+  PRINCIPAL
+  MANAGER
+  DIRECTOR
+  EXECUTIVE
+}
+
+// ---------------------------------------------------------------------------
+// CV — uploaded file + parsed structured content + review
+// ---------------------------------------------------------------------------
+
+model Cv {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fileName      String
+  storageKey    String // key/path understood by the storage adapter (local disk or S3-compatible)
+  mimeType      String
+  fileSizeBytes Int
+
+  rawText   String? // extracted plain text
+  parsed    Json? // structured extraction: skills, roles, education, experience[], etc.
+  embedding Float[] // vector embedding of the CV for similarity scoring (see BUILD_SPEC.md)
+
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  review            CvReview?
+  tailoredVersions  TailoredCv[]
+  activeForProfiles SearchProfile[] @relation("ProfileActiveCv")
+
+  @@index([userId])
+  @@map("cvs")
+}
+
+model CvReview {
+  id   String @id @default(cuid())
+  cvId String @unique
+  cv   Cv     @relation(fields: [cvId], references: [id], onDelete: Cascade)
+
+  overallScore Int // 0-100
+  verdict      CvVerdict
+  summary      String
+
+  strengths String[]
+  issues    CvIssue[]
+
+  atsCompatible Boolean
+  atsNotes      String?
+
+  createdAt DateTime @default(now())
+
+  @@map("cv_reviews")
+}
+
+enum CvVerdict {
+  STRONG
+  GOOD
+  NEEDS_WORK
+  WEAK
+}
+
+model CvIssue {
+  id       String   @id @default(cuid())
+  reviewId String
+  review   CvReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  category    CvIssueCategory
+  severity    IssueSeverity
+  description String
+  suggestion  String
+
+  @@map("cv_issues")
+}
+
+enum CvIssueCategory {
+  MISSING_KEYWORDS
+  WEAK_BULLET
+  STRUCTURE
+  FORMATTING
+  ATS_COMPATIBILITY
+  QUANTIFICATION
+  OTHER
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// A CV tailored towards one specific job posting.
+model TailoredCv {
+  id           String     @id @default(cuid())
+  cvId         String
+  cv           Cv         @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  jobPostingId String
+  jobPosting   JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+
+  suggestions   Json // ordered list of edits: {section, before, after, reason}
+  rewrittenText String? // optional full rewritten CV text/markdown
+
+  createdAt DateTime @default(now())
+
+  @@unique([cvId, jobPostingId])
+  @@map("tailored_cvs")
+}
+
+// ---------------------------------------------------------------------------
+// Job sources + postings
+// ---------------------------------------------------------------------------
+
+model JobSource {
+  id            String        @id @default(cuid())
+  key           String        @unique // e.g. "remotive", "arbeitnow", "remoteok"
+  name          String
+  kind          JobSourceKind
+  baseUrl       String
+  enabled       Boolean       @default(true)
+  lastFetchedAt DateTime?
+  lastError     String?
+
+  postings JobPosting[]
+
+  @@map("job_sources")
+}
+
+enum JobSourceKind {
+  PUBLIC_API
+  RSS
+  COMPANY_BOARD // Greenhouse/Lever style per-company job boards
+}
+
+model JobPosting {
+  id         String    @id @default(cuid())
+  sourceId   String
+  source     JobSource @relation(fields: [sourceId], references: [id])
+  externalId String // id/url from the source, used for de-duplication
+
+  title          String
+  company        String
+  location       String?
+  remoteType     RemotePreference @default(ANY)
+  seniority      Seniority?
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String?
+  industries     String[]
+  description    String
+  url            String
+
+  embedding Float[] // vector embedding of the normalized description
+  postedAt  DateTime?
+  fetchedAt DateTime  @default(now())
+
+  matches     MatchScore[]
+  tailoredCvs TailoredCv[]
+
+  @@unique([sourceId, externalId])
+  @@index([postedAt])
+  @@map("job_postings")
+}
+
+// ---------------------------------------------------------------------------
+// Matching
+// ---------------------------------------------------------------------------
+
+model MatchScore {
+  id           String        @id @default(cuid())
+  profileId    String
+  profile      SearchProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobPostingId String
+  jobPosting   JobPosting    @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+
+  score          Int // 0-100
+  explanation    String // short human-readable rationale
+  matchedSkills  String[]
+  missingSkills  String[]
+  isWildcard     Boolean  @default(false)
+  wildcardReason String?
+
+  createdAt DateTime @default(now())
+
+  digestEntry DailyDigestEntry?
+
+  @@unique([profileId, jobPostingId])
+  @@index([profileId, score])
+  @@map("match_scores")
+}
+
+// ---------------------------------------------------------------------------
+// Daily digest
+// ---------------------------------------------------------------------------
+
+model DailyDigest {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  digestDate DateTime // date-only, one digest per user per day
+  sentAt     DateTime?
+  channel    DigestChannel @default(EMAIL)
+
+  entries DailyDigestEntry[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, digestDate])
+  @@map("daily_digests")
+}
+
+enum DigestChannel {
+  EMAIL
+  IN_APP
+}
+
+model DailyDigestEntry {
+  id           String        @id @default(cuid())
+  digestId     String
+  digest       DailyDigest   @relation(fields: [digestId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      SearchProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  matchScoreId String        @unique
+  matchScore   MatchScore    @relation(fields: [matchScoreId], references: [id], onDelete: Cascade)
+
+  rank Int // position within the digest (best match first)
+
+  @@map("daily_digest_entries")
+}
