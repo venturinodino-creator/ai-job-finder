@@ -48,3 +48,18 @@ next-env.d.ts
 
 # stray state from disabled ruflo/claude-flow tooling
 .claude-flow/
+
+.vercel
+.env*
+
+# agent-skill scaffolding dropped by `vercel integration add` (symlinks, per-machine)
+.agents/
+.claude/skills/
+skills-lock.json
+
+# agent-skill scaffolding dropped by `vercel integration add` (symlinks, per-machine)
+.agents/
+.claude/skills/
+skills-lock.json
+.claude/proven-config.json
+.claude/.proven-config-version

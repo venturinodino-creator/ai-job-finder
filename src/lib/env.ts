@@ -18,8 +18,13 @@ const schema = z.object({
   EMAIL_FROM: z.string().default("AI Job Finder <jobs@yourdomain.com>"),
   APP_BASE_URL: z.string().default("http://localhost:3000"),
 
-  STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
+  // "local" only works where the filesystem persists across requests (a
+  // self-hosted server, a Docker volume) — never on serverless platforms
+  // like Vercel, which needs STORAGE_DRIVER=vercel-blob set explicitly
+  // (plus a linked Blob store, which injects BLOB_READ_WRITE_TOKEN).
+  STORAGE_DRIVER: z.enum(["local", "vercel-blob", "s3"]).default("local"),
   STORAGE_LOCAL_DIR: z.string().default("./data/uploads"),
+  BLOB_READ_WRITE_TOKEN: z.string().optional(),
   S3_BUCKET: z.string().optional(),
   S3_REGION: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(),

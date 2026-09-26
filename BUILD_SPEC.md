@@ -22,10 +22,10 @@ application has the best shot. This document is the architecture reference; `REA
 | LLM               | Vercel AI SDK (`ai`) with pluggable provider       | `LLM_PROVIDER=anthropic\|openai` in `.env` swaps the model with zero code changes. Anthropic (Claude) is the default. |
 | Embeddings        | OpenAI `text-embedding-3-small` (pluggable, optional) | Cheap cosine-similarity pre-filter before the LLM scores/explains the shortlist. Anthropic has no embeddings endpoint, so this is skippable — every agent that embeds falls back gracefully (ingest stores postings without vectors, matching scores the most recent postings directly) when no embeddings key is set. |
 | Auth              | Cookie session + JWT, bcrypt password hashing      | No external auth dependency required for a self-hosted single-file deploy. Swap for NextAuth/Clerk if you want SSO. |
-| File storage      | Pluggable adapter: local disk (default) or S3-compatible | Self-host works out of the box; swap to S3/R2 for multi-instance deploys. |
-| Background jobs   | `node-cron` worker process (`npm run worker`), or HTTP cron endpoints (`/api/cron/*`) | Works with just `docker compose up`; also supports managed cron (Vercel Cron, k8s CronJob, GH Actions schedule) via the HTTP variant. |
+| File storage      | Pluggable adapter: local disk (default), Vercel Blob, or S3-compatible (stub) | Self-host works out of the box. `vercel-blob` stores CVs as private blobs for Vercel, where functions have no persistent disk. S3/R2 is still a TODO (§9). All adapters serve files through the same authenticated `/api/files/[...key]` route, so the ownership check lives in one place. |
+| Background jobs   | `node-cron` worker process (`npm run worker`), or HTTP cron endpoints (`/api/cron/*`) | Works with just `docker compose up`; `vercel.json` ships the same schedule as Vercel Cron for the hosted path. Both call the identical agent functions. |
 | Email digest      | Resend (optional)                                  | Digests always generate in-app; email is a nice-to-have that degrades gracefully without an API key. |
-| Deployment        | Docker Compose (self-host) or any Node host / Vercel | `Dockerfile` + `docker-compose.yml` included. No platform lock-in — it's a standard Next.js + Postgres app. |
+| Deployment        | Docker Compose (self-host) or Vercel (Neon Postgres + Blob + Cron) | `Dockerfile` + `docker-compose.yml` for self-hosting; `vercel-build` runs migrations on every Vercel deploy. No platform lock-in — it's a standard Next.js + Postgres app either way. |
 
 ## 3. Data model
 
@@ -94,9 +94,17 @@ Two ways to run the agents; pick one per deployment:
    - **06:30 UTC** — digest: for every user with an active profile, re-run matching (`src/agents/match.ts`)
      against the last 14 days of postings, persist `MatchScore` rows, compile + send today's `DailyDigest`.
    - Also runs both once immediately on boot, so a fresh self-host isn't empty until the next scheduled tick.
-2. **Managed HTTP cron** — `POST /api/cron/ingest` and `POST /api/cron/digest`, both guarded by
-   `Authorization: Bearer $CRON_SECRET`. Point Vercel Cron, a Kubernetes `CronJob`, or a GitHub Actions
-   schedule at these instead of running the worker process.
+2. **Managed HTTP cron** — `/api/cron/ingest` and `/api/cron/digest` (GET or POST), both guarded by
+   `Authorization: Bearer $CRON_SECRET`. `vercel.json` already declares the same two schedules for Vercel
+   Cron, which sends that header on its own once `CRON_SECRET` is set as a project env var; a Kubernetes
+   `CronJob` or GitHub Actions schedule can hit the same routes. Both routes set `maxDuration = 300` since a
+   digest is one LLM call per active profile, run sequentially.
+
+   One deployment gotcha for serverless Postgres (Neon, Supabase): `prisma migrate deploy` takes a
+   session-level advisory lock, which PgBouncer's transaction pooling can't hold — run migrations against the
+   provider's **unpooled** URL (`prisma.config.ts` prefers `DATABASE_URL_UNPOOLED` when present). If a deploy
+   is interrupted mid-migration, the lock can be orphaned on a pooled backend and every later `migrate deploy`
+   will time out; terminate the holder (`pg_locks` where `objid = 72707369`, then `pg_terminate_backend`).
 
 On top of the schedule, two actions are user-triggered (no cron needed):
 
@@ -150,7 +158,8 @@ For a given `SearchProfile` (see `src/agents/match.ts`):
 ## 9. What's stubbed / next steps
 
 - **S3 storage adapter** (`src/lib/storage.ts`) — interface is defined, implementation is a `TODO`; wire up
-  `@aws-sdk/client-s3` (or R2/MinIO's S3-compatible SDK) when you need multi-instance deploys.
+  `@aws-sdk/client-s3` (or R2/MinIO's S3-compatible SDK) if you need a non-Vercel multi-instance deploy. (The
+  Vercel Blob adapter is implemented — use `STORAGE_DRIVER=vercel-blob` there.)
 - **Per-user digest hour** — the `User.digestHour`/`timezone` columns exist but the worker currently runs one
   global schedule; grouping users by local send time is a natural v1.1.
 - **Greenhouse/Lever company-board adapters** — see §4.

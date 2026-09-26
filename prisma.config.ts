@@ -9,6 +9,13 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // This URL is what the Prisma CLI (migrate, studio) connects with; the
+    // runtime client uses DATABASE_URL via the pg adapter in src/lib/db.ts.
+    // Serverless Postgres providers (Neon, Supabase, ...) hand out a pooled
+    // URL that goes through PgBouncer in transaction mode, which can't hold
+    // the session-level advisory lock `migrate deploy` takes — the deploy
+    // just hangs until it times out. Prefer the direct/unpooled URL for the
+    // CLI when the provider supplies one (Neon sets DATABASE_URL_UNPOOLED).
+    url: process.env["DATABASE_URL_UNPOOLED"] ?? process.env["DATABASE_URL"],
   },
 });

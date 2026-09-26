@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import { db } from "@/lib/db";
 import { embedOne } from "@/lib/embeddings";
@@ -34,6 +33,12 @@ export type ParsedCv = z.infer<typeof parsedCvSchema>;
 
 export async function extractText(buffer: Buffer, mimeType: string): Promise<string> {
   if (mimeType === "application/pdf") {
+    // Imported lazily: pdf-parse (via pdfjs-dist) runs polyfill/setup code as
+    // soon as it's loaded, which throws on serverless runtimes missing a
+    // DOMMatrix polyfill (e.g. Vercel functions). A top-level import would
+    // break every CV upload, PDF or not; loading it only for actual PDFs
+    // keeps that failure scoped to PDFs specifically.
+    const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: buffer });
     try {
       const result = await parser.getText();
