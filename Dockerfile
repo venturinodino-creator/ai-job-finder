@@ -18,7 +18,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/src/generated ./src/generated
 COPY --from=build /app/public ./public
-COPY package.json next.config.ts prisma.config.ts ./
+COPY package.json next.config.ts prisma.config.ts tsconfig.json ./
 COPY prisma ./prisma
 COPY src ./src
 
