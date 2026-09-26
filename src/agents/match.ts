@@ -43,15 +43,8 @@ export async function runMatchForProfile(profileId: string): Promise<number> {
   if (candidates.length === 0) return 0;
 
   const profileText = buildProfileText(profile, profile.activeCv);
-  const profileEmbedding = await embedOne(profileText);
-
-  const ranked = candidates
-    .map((job: JobPosting) => ({ job, similarity: cosineSimilarity(profileEmbedding, job.embedding) }))
-    .filter((r: { job: JobPosting; similarity: number }) => r.job.embedding.length > 0)
-    .sort((a: { similarity: number }, b: { similarity: number }) => b.similarity - a.similarity)
-    .slice(0, CANDIDATE_POOL_SIZE);
-
-  if (ranked.length === 0) return 0;
+  const shortlist = await buildShortlist(profileText, candidates);
+  if (shortlist.length === 0) return 0;
 
   const scored = await llmObject({
     schema: scoredJobSchema,
@@ -59,7 +52,7 @@ export async function runMatchForProfile(profileId: string): Promise<number> {
       "You score job postings against a candidate's profile and CV. Be concrete and honest in explanations; " +
       "flag isWildcard=true only for jobs outside the candidate's exact target roles/industries that are still " +
       "a genuinely strong skills fit (adjacent titles, transferable skills, adjacent industries).",
-    prompt: buildScoringPrompt(profileText, ranked.map((r: { job: JobPosting }) => r.job)),
+    prompt: buildScoringPrompt(profileText, shortlist),
   });
 
   const byId = new Map(scored.results.map((r) => [r.jobId, r]));
@@ -97,6 +90,32 @@ export async function runMatchForProfile(profileId: string): Promise<number> {
   }
 
   return toPersist.length;
+}
+
+/**
+ * Anthropic has no embeddings endpoint, and embeddings are only a cost-saving
+ * pre-filter — so they're optional. With an embeddings key configured, rank
+ * by cosine similarity and take the top N; without one, just take the N most
+ * recently posted candidates (already the query's sort order) and let the
+ * LLM score all of them directly.
+ */
+async function buildShortlist(profileText: string, candidates: JobPosting[]): Promise<JobPosting[]> {
+  let profileEmbedding: number[];
+  try {
+    profileEmbedding = await embedOne(profileText);
+  } catch (err) {
+    console.warn("Skipping embedding pre-filter for this match run:", err instanceof Error ? err.message : err);
+    return candidates.slice(0, CANDIDATE_POOL_SIZE);
+  }
+
+  const withEmbeddings = candidates.filter((job) => job.embedding.length > 0);
+  if (withEmbeddings.length === 0) return candidates.slice(0, CANDIDATE_POOL_SIZE);
+
+  return withEmbeddings
+    .map((job) => ({ job, similarity: cosineSimilarity(profileEmbedding, job.embedding) }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, CANDIDATE_POOL_SIZE)
+    .map((r) => r.job);
 }
 
 function buildProfileText(profile: SearchProfile, cv: Cv | null): string {

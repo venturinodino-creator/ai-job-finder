@@ -20,7 +20,7 @@ application has the best shot. This document is the architecture reference; `REA
 | App framework     | Next.js 16 (App Router, TypeScript)                | One codebase for UI + API routes; runs anywhere Node runs (self-host, Docker, or any Node host). |
 | Database          | PostgreSQL + Prisma ORM                            | Relational fit for users/profiles/postings/matches; Prisma migrations are the easiest onboarding for contributors. |
 | LLM               | Vercel AI SDK (`ai`) with pluggable provider       | `LLM_PROVIDER=anthropic\|openai` in `.env` swaps the model with zero code changes. Anthropic (Claude) is the default. |
-| Embeddings        | OpenAI `text-embedding-3-small` (pluggable)        | Cheap cosine-similarity pre-filter before the LLM scores/explains the shortlist — keeps LLM cost down. |
+| Embeddings        | OpenAI `text-embedding-3-small` (pluggable, optional) | Cheap cosine-similarity pre-filter before the LLM scores/explains the shortlist. Anthropic has no embeddings endpoint, so this is skippable — every agent that embeds falls back gracefully (ingest stores postings without vectors, matching scores the most recent postings directly) when no embeddings key is set. |
 | Auth              | Cookie session + JWT, bcrypt password hashing      | No external auth dependency required for a self-hosted single-file deploy. Swap for NextAuth/Clerk if you want SSO. |
 | File storage      | Pluggable adapter: local disk (default) or S3-compatible | Self-host works out of the box; swap to S3/R2 for multi-instance deploys. |
 | Background jobs   | `node-cron` worker process (`npm run worker`), or HTTP cron endpoints (`/api/cron/*`) | Works with just `docker compose up`; also supports managed cron (Vercel Cron, k8s CronJob, GH Actions schedule) via the HTTP variant. |
@@ -115,8 +115,9 @@ For a given `SearchProfile` (see `src/agents/match.ts`):
 
 1. Build a text blob from the profile's target roles/locations/remote-pref/seniority/salary/industries/languages
    plus the active CV's extracted text.
-2. Embed that blob once, compare (cosine similarity) against the last 14 days of `JobPosting` embeddings, take
-   the top 40 candidates.
+2. If an embeddings provider is configured, embed that blob and compare (cosine similarity) against the last 14
+   days of `JobPosting` embeddings, taking the top 40 candidates. Without one (e.g. an Anthropic-only setup,
+   since Anthropic has no embeddings endpoint), skip straight to the 40 most recently posted jobs instead.
 3. One structured LLM call scores all 40 against the profile: `score` (0–100), one-line `explanation`,
    `matchedSkills`/`missingSkills`, and `isWildcard` (+ `wildcardReason` when true — the model is instructed to
    flag wildcards only for roles outside the exact target search that are still a genuinely strong skills fit).

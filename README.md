@@ -13,9 +13,11 @@ have.
 
 ```bash
 cp .env.example .env
-# then edit .env: at minimum set JWT_SECRET, and ANTHROPIC_API_KEY (or OPENAI_API_KEY + LLM_PROVIDER=openai)
-# for CV parsing/review/tailoring and match scoring. OPENAI_API_KEY is also
-# required for embeddings regardless of LLM_PROVIDER (see .env.example).
+# then edit .env: at minimum set JWT_SECRET and ANTHROPIC_API_KEY (or OPENAI_API_KEY
+# + LLM_PROVIDER=openai) for CV parsing/review/tailoring and match scoring.
+# OPENAI_API_KEY is optional — it only enables an embedding-based pre-filter
+# before matching (Anthropic has no embeddings endpoint); without it, the app
+# runs on Claude alone and scores the most recent postings directly.
 
 docker compose up -d db          # Postgres on localhost:5432
 npm install

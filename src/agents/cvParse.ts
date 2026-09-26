@@ -69,7 +69,7 @@ export async function parseCv(cvId: string): Promise<ParsedCv> {
     prompt: rawText.slice(0, 12000),
   });
 
-  const embedding = await embedOne(`${parsed.headline ?? ""} ${parsed.skills.join(", ")} ${rawText}`);
+  const embedding = await safeEmbed(`${parsed.headline ?? ""} ${parsed.skills.join(", ")} ${rawText}`);
 
   await db.cv.update({
     where: { id: cv.id },
@@ -77,4 +77,14 @@ export async function parseCv(cvId: string): Promise<ParsedCv> {
   });
 
   return parsed;
+}
+
+/** No embeddings provider (e.g. Anthropic-only setups) shouldn't block CV parsing — it's only used as a pre-filter. */
+async function safeEmbed(text: string): Promise<number[]> {
+  try {
+    return await embedOne(text);
+  } catch (err) {
+    console.warn("Skipping CV embedding:", err instanceof Error ? err.message : err);
+    return [];
+  }
 }
