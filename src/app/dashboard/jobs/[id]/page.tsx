@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
-import { getCurrentUserId } from "@/lib/auth";
+import { requireDashboardUserId } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { markJobViewed } from "@/lib/jobs";
 import { TailorCvButton } from "@/components/TailorCvButton";
+import { MarkAppliedButton } from "@/components/MarkAppliedButton";
 
 interface TailorSuggestion {
   section: string;
@@ -12,35 +14,44 @@ interface TailorSuggestion {
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const userId = (await getCurrentUserId())!;
+  const userId = await requireDashboardUserId();
 
   const job = await db.jobPosting.findUnique({ where: { id }, include: { source: true } });
   if (!job) notFound();
 
-  const [activeProfile, tailored] = await Promise.all([
+  await markJobViewed(userId, id);
+
+  const [activeProfile, tailored, matches] = await Promise.all([
     db.searchProfile.findFirst({ where: { userId, isActive: true }, include: { activeCv: true } }),
     db.tailoredCv.findFirst({ where: { jobPostingId: id, cv: { userId } } }),
+    db.matchScore.findMany({ where: { jobPostingId: id, profile: { userId } } }),
   ]);
   const activeCv = activeProfile?.activeCv ?? null;
+  const applied = matches.some((m) => m.appliedAt !== null);
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-semibold">{job.title}</h1>
-        <p className="text-gray-600 dark:text-gray-400">
+      <div className="space-y-2">
+        <h1 className="font-display text-2xl font-semibold">{job.title}</h1>
+        <p style={{ color: "var(--color-text-muted)" }}>
           {job.company} · {job.location ?? "Location n/a"} · {job.remoteType} · via {job.source.name}
         </p>
-        <a href={job.url} target="_blank" rel="noreferrer" className="text-sm underline">
-          View original posting
-        </a>
+        <div className="flex items-center gap-4">
+          <a href={job.url} target="_blank" rel="noreferrer" className="text-sm underline">
+            View original posting
+          </a>
+          <MarkAppliedButton jobId={job.id} appliedInitially={applied} />
+        </div>
       </div>
 
       <div className="card whitespace-pre-wrap text-sm">{job.description.slice(0, 4000)}</div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-medium">Tailor your CV to this job</h2>
+        <h2 className="font-display text-lg font-semibold">Tailor your CV to this job</h2>
         {!activeCv ? (
-          <p className="text-sm text-gray-500">Upload and activate a CV first on the CV page.</p>
+          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+            Upload and activate a CV first on the CV page.
+          </p>
         ) : (
           <TailorCvButton jobId={job.id} cvId={activeCv.id} />
         )}
@@ -57,9 +68,13 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               {(tailored.suggestions as unknown as TailorSuggestion[]).map((s, i) => (
                 <div key={i} className="card text-sm">
                   <p className="font-medium">{s.section}</p>
-                  <p className="text-gray-500 line-through">{s.before}</p>
+                  <p className="line-through" style={{ color: "var(--color-text-muted)" }}>
+                    {s.before}
+                  </p>
                   <p>{s.after}</p>
-                  <p className="text-gray-600 dark:text-gray-400 mt-1">Why: {s.reason}</p>
+                  <p className="mt-1" style={{ color: "var(--color-text-muted)" }}>
+                    Why: {s.reason}
+                  </p>
                 </div>
               ))}
             </div>

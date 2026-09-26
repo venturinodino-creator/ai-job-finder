@@ -27,7 +27,11 @@ const reviewSchema = z.object({
   ),
 });
 
-/** Rates a CV and generates concrete, actionable fixes. Persists a CvReview + CvIssue rows. */
+/**
+ * Rates a CV and generates concrete, actionable fixes. Persists a new
+ * CvReview + CvIssue rows — previous reviews for this CV are kept (not
+ * overwritten) so the analytics page can chart score history over time.
+ */
 export async function reviewCv(cvId: string) {
   const cv = await db.cv.findUniqueOrThrow({ where: { id: cvId } });
   if (!cv.rawText) {
@@ -42,8 +46,6 @@ export async function reviewCv(cvId: string) {
       "achievements. Be concrete — reference actual text from the CV, don't give generic advice.",
     prompt: cv.rawText.slice(0, 12000),
   });
-
-  await db.cvReview.deleteMany({ where: { cvId } });
 
   return db.cvReview.create({
     data: {

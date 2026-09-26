@@ -32,7 +32,7 @@ export function RefreshMatchesButton() {
       >
         {loading ? "Scoring today's jobs (this calls the LLM, can take ~30-60s)..." : "Refresh matches now"}
       </button>
-      {error && <span className="text-sm text-red-600">{error}</span>}
+      {error && <span className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</span>}
     </div>
   );
 }

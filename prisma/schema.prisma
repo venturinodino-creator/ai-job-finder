@@ -24,9 +24,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  profiles SearchProfile[]
-  cvs      Cv[]
-  digests  DailyDigest[]
+  profiles       SearchProfile[]
+  cvs            Cv[]
+  digests        DailyDigest[]
+  progress       UserProgress?
+  achievements   UserAchievement[]
+  activityEvents ActivityEvent[]
 
   @@map("users")
 }
@@ -109,7 +112,7 @@ model Cv {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  review            CvReview?
+  reviews           CvReview[]
   tailoredVersions  TailoredCv[]
   activeForProfiles SearchProfile[] @relation("ProfileActiveCv")
 
@@ -117,9 +120,12 @@ model Cv {
   @@map("cvs")
 }
 
+// One CV can have many reviews over time — each re-review (re-upload, manual
+// re-run) keeps its row so the CV-score trend on the analytics page has real
+// history instead of only ever showing the latest score.
 model CvReview {
   id   String @id @default(cuid())
-  cvId String @unique
+  cvId String
   cv   Cv     @relation(fields: [cvId], references: [id], onDelete: Cascade)
 
   overallScore Int // 0-100
@@ -134,6 +140,7 @@ model CvReview {
 
   createdAt DateTime @default(now())
 
+  @@index([cvId, createdAt])
   @@map("cv_reviews")
 }
 
@@ -263,6 +270,9 @@ model MatchScore {
   isWildcard     Boolean  @default(false)
   wildcardReason String?
 
+  viewedAt  DateTime? // first time the user opened this job's detail page
+  appliedAt DateTime? // set when the user marks this job as applied
+
   createdAt DateTime @default(now())
 
   digestEntry DailyDigestEntry?
@@ -310,4 +320,81 @@ model DailyDigestEntry {
   rank Int // position within the digest (best match first)
 
   @@map("daily_digest_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Gamification + activity log (also the source data for the analytics page)
+// ---------------------------------------------------------------------------
+
+model UserProgress {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  points        Int       @default(0)
+  level         Int       @default(1)
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
+  lastActiveOn  DateTime? // date-only; used to compute streak continuation
+
+  updatedAt DateTime @updatedAt
+
+  @@map("user_progress")
+}
+
+// Static catalog of unlockable achievements — seeded once, referenced by key.
+model Achievement {
+  id          String @id @default(cuid())
+  key         String @unique
+  name        String
+  description String
+  icon        String // short emoji glyph
+  points      Int    @default(0)
+  sortOrder   Int    @default(0)
+
+  unlockedBy UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, achievementId])
+  @@map("user_achievements")
+}
+
+enum ActivityType {
+  PROFILE_CREATED
+  CV_UPLOADED
+  CV_REVIEWED
+  CV_TAILORED
+  JOB_VIEWED
+  JOB_APPLIED
+  DAILY_VISIT
+}
+
+// Every point-earning action, in order. Powers both the gamification engine
+// (points/streak/achievement checks all read from this) and the analytics
+// page's activity history — one log, two views.
+model ActivityEvent {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type     ActivityType
+  points   Int          @default(0)
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+  @@index([userId, createdAt])
+  @@map("activity_events")
 }

@@ -21,7 +21,7 @@ cp .env.example .env
 # before matching (Anthropic has no embeddings endpoint); without it, the app
 # runs on Claude alone and scores the most recent postings directly.
 
-docker compose up -d db          # Postgres on localhost:5432
+docker compose up -d db          # Postgres on localhost:5433 (not 5432 — avoids clashing with a native Postgres install)
 npm install
 npm run db:migrate               # create tables
 npm run dev                      # http://localhost:3000

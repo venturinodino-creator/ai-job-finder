@@ -59,7 +59,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         />
       </Field>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
       <button
         type="submit"

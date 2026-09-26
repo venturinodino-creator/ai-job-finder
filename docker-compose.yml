@@ -7,7 +7,11 @@ services:
       POSTGRES_PASSWORD: jobfinder
       POSTGRES_DB: jobfinder
     ports:
-      - "5432:5432"
+      # Host port 5433, not 5432: some machines already run a native Postgres
+      # service on 5432 (this project's own containers always talk to the db
+      # over the internal Docker network as `db:5432`, so this only affects
+      # host-side tools like `prisma migrate dev`).
+      - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:

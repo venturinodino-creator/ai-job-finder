@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ApiError, handle, requireUserId } from "@/lib/api";
 import { tailorCvForJob } from "@/agents/cvTailor";
+import { recordActivity } from "@/lib/gamification";
 
 const bodySchema = z.object({ cvId: z.string() });
 
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!job) throw new ApiError(404, "Job posting not found");
 
     const tailored = await tailorCvForJob(cvId, jobPostingId);
+    await recordActivity(userId, "CV_TAILORED", { jobPostingId, cvId });
     return NextResponse.json({ tailored });
   });
 }

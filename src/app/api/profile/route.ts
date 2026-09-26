@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { handle, requireUserId } from "@/lib/api";
+import { recordActivity } from "@/lib/gamification";
 
 const profileSchema = z.object({
   name: z.string().min(1).default("Default search"),
@@ -36,6 +37,12 @@ export async function POST(req: NextRequest) {
     const userId = await requireUserId();
     const body = profileSchema.parse(await req.json());
     const profile = await db.searchProfile.create({ data: { ...body, userId } });
+
+    const profileCount = await db.searchProfile.count({ where: { userId } });
+    if (profileCount === 1) {
+      await recordActivity(userId, "PROFILE_CREATED");
+    }
+
     return NextResponse.json({ profile }, { status: 201 });
   });
 }

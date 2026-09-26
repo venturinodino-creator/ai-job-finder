@@ -40,7 +40,7 @@ export function CvUploadForm() {
         className="text-sm"
         required
       />
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
       <button type="submit" disabled={uploading} className="btn-primary self-start">
         {uploading ? "Uploading & reviewing (this calls the LLM, can take ~10-20s)..." : "Upload CV"}
       </button>

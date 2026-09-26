@@ -1,41 +1,169 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+  Design direction: "Signal" — the product reads like a daily intelligence
+  briefing on the job market. Scores are readings, not decoration: every score
+  in the app (match %, CV score, XP) renders through the same signal-bar
+  device. Fraunces (display) is used sparingly for report-style headlines;
+  IBM Plex Sans carries body copy; IBM Plex Mono renders every number so
+  scores read like instrument output.
+*/
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  --color-bg: #f5f4f2;
+  --color-bg-elevated: #ffffff;
+  --color-text: #14171f;
+  --color-text-muted: #6b6759;
+  --color-border: #e4e1d9;
+  --color-accent: #e14f2a;
+  --color-accent-fg: #ffffff;
+  --color-accent-soft: #fbe4da;
+  --color-secondary: #2f6f5e;
+  --color-secondary-soft: #dceae5;
+  --color-gamify: #a67c1e;
+  --color-gamify-soft: #f3e6c8;
+  --color-danger: #c23b3b;
+
+  /* Validated categorical triplet for the source-breakdown chart (dataviz
+     skill reference palette, slots 1-3 — passes all-pairs CVD checks in both
+     modes; kept separate from brand tokens since chart color is computed. */
+  --chart-cat-1: #2a78d6;
+  --chart-cat-2: #eb6834;
+  --chart-cat-3: #1baf7a;
+  --chart-grid: #e4e1d9;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --color-bg: #14171f;
+    --color-bg-elevated: #1b1f29;
+    --color-text: #f5f4f2;
+    --color-text-muted: #9b968a;
+    --color-border: #2a2e38;
+    --color-accent: #ff6b47;
+    --color-accent-fg: #14171f;
+    --color-accent-soft: #3a2620;
+    --color-secondary: #4e9c86;
+    --color-secondary-soft: #1c332c;
+    --color-gamify: #e0b84d;
+    --color-gamify-soft: #3a2f14;
+    --color-danger: #e5726f;
+    --chart-cat-1: #3987e5;
+    --chart-cat-2: #d95926;
+    --chart-cat-3: #199e70;
+    --chart-grid: #2a2e38;
   }
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #14171f;
+  --color-bg-elevated: #1b1f29;
+  --color-text: #f5f4f2;
+  --color-text-muted: #9b968a;
+  --color-border: #2a2e38;
+  --color-accent: #ff6b47;
+  --color-accent-fg: #14171f;
+  --color-accent-soft: #3a2620;
+  --color-secondary: #4e9c86;
+  --color-secondary-soft: #1c332c;
+  --color-gamify: #e0b84d;
+  --color-gamify-soft: #3a2f14;
+  --color-danger: #e5726f;
+  --chart-cat-1: #3987e5;
+  --chart-cat-2: #d95926;
+  --chart-cat-3: #199e70;
+  --chart-grid: #2a2e38;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-bg-elevated: var(--color-bg-elevated);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-border: var(--color-border);
+  --color-accent: var(--color-accent);
+  --color-accent-fg: var(--color-accent-fg);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-soft: var(--color-secondary-soft);
+  --color-gamify: var(--color-gamify);
+  --color-gamify-soft: var(--color-gamify-soft);
+  --color-danger: var(--color-danger);
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @layer components {
+  .font-display {
+    font-family: var(--font-display), ui-serif, serif;
+  }
+  .font-data {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
   .input {
-    @apply w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black dark:focus:ring-white;
+    @apply w-full rounded-md border px-3 py-2 text-sm outline-none transition-colors;
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    color: var(--color-text);
   }
+  .input:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
   .btn-primary {
-    @apply rounded-md bg-black text-white dark:bg-white dark:text-black px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50;
+    @apply rounded-md px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50;
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
   }
+  .btn-primary:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+  .btn-primary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
   .btn-secondary {
-    @apply rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-900;
+    @apply rounded-md border px-4 py-2 text-sm font-medium transition-colors;
+    border-color: var(--color-border);
+    color: var(--color-text);
   }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-bg-elevated);
+  }
+  .btn-secondary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
   .card {
-    @apply rounded-lg border border-gray-200 dark:border-gray-800 p-4;
+    @apply rounded-lg border p-4;
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+  }
+
+  .eyebrow {
+    @apply text-xs font-medium uppercase tracking-[0.14em];
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
   }
 }

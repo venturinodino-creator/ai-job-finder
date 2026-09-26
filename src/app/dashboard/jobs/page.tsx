@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { getCurrentUserId } from "@/lib/auth";
+import { requireDashboardUserId } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { RefreshMatchesButton } from "@/components/RefreshMatchesButton";
+import { SignalBar } from "@/components/SignalBar";
 
 export default async function JobsPage() {
-  const userId = (await getCurrentUserId())!;
+  const userId = await requireDashboardUserId();
   const profile = await db.searchProfile.findFirst({ where: { userId, isActive: true }, orderBy: { createdAt: "asc" } });
 
   if (!profile) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold">Job feed</h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <h1 className="font-display text-3xl font-semibold">Job feed</h1>
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
           Set up a{" "}
           <Link href="/dashboard/profile" className="underline">
             search profile
@@ -35,12 +36,15 @@ export default async function JobsPage() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Job feed</h1>
+        <div>
+          <p className="eyebrow">Today&apos;s signal</p>
+          <h1 className="font-display text-3xl font-semibold mt-1">Job feed</h1>
+        </div>
         <RefreshMatchesButton />
       </div>
 
       {matches.length === 0 && (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
           No matches yet. Make sure you&apos;ve uploaded a CV and set it active on your search profile, then hit
           &quot;Refresh matches now&quot;.
         </p>
@@ -68,7 +72,7 @@ export default async function JobsPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-medium">{title}</h2>
+      <h2 className="font-display text-lg font-semibold">{title}</h2>
       <div className="space-y-3">{children}</div>
     </div>
   );
@@ -80,20 +84,39 @@ type MatchWithJob = Awaited<ReturnType<typeof db.matchScore.findMany>>[number] &
 
 function JobCard({ match }: { match: MatchWithJob }) {
   const job = match.jobPosting;
+  const tone = match.isWildcard ? "gamify" : match.score >= 60 ? "secondary" : "accent";
   return (
-    <Link href={`/dashboard/jobs/${job.id}`} className="card block hover:border-gray-400 dark:hover:border-gray-600">
+    <Link
+      href={`/dashboard/jobs/${job.id}`}
+      className="card block transition-colors"
+      style={{ borderColor: "var(--color-border)" }}
+    >
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-medium">
-            {job.title} <span className="text-gray-500">— {job.company}</span>
-          </p>
-          <p className="text-xs text-gray-500">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-medium">
+              {job.title} <span style={{ color: "var(--color-text-muted)" }}>— {job.company}</span>
+            </p>
+            {match.appliedAt && (
+              <span
+                className="font-data text-[10px] font-medium uppercase tracking-wide rounded-full px-2 py-0.5"
+                style={{ background: "var(--color-secondary-soft)", color: "var(--color-secondary)" }}
+              >
+                Applied
+              </span>
+            )}
+          </div>
+          <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
             {job.location ?? "Location n/a"} · {job.remoteType} · via {job.source.name}
           </p>
-          <p className="text-sm mt-1">{match.explanation}</p>
-          {match.wildcardReason && <p className="text-sm text-purple-600 mt-1">Why a wildcard: {match.wildcardReason}</p>}
+          <p className="text-sm mt-2">{match.explanation}</p>
+          {match.wildcardReason && (
+            <p className="text-sm mt-1" style={{ color: "var(--color-gamify)" }}>
+              Why a wildcard: {match.wildcardReason}
+            </p>
+          )}
         </div>
-        <span className="text-lg font-semibold whitespace-nowrap">{match.score}%</span>
+        <SignalBar value={match.score} tone={tone} />
       </div>
     </Link>
   );

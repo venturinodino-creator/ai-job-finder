@@ -26,6 +26,10 @@ export async function POST(req: NextRequest) {
         name: body.name,
       },
     });
+    // Created once, here, as the single writer — avoids a race between the
+    // dashboard layout and page both trying to create it concurrently on
+    // first visit (see src/lib/gamification.ts ensureProgress).
+    await db.userProgress.create({ data: { userId: user.id } });
 
     await setSessionCookie(createSessionToken(user.id));
     return NextResponse.json({ id: user.id, email: user.email });

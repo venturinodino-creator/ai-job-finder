@@ -109,7 +109,7 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
         <input className="input" value={languages} onChange={(e) => setLanguages(e.target.value)} />
       </Field>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
       <button type="submit" disabled={saving} className="btn-primary">
         {saving ? "Saving..." : profile ? "Save changes" : "Create search profile"}
@@ -123,7 +123,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <label className="block space-y-1">
       <span className="text-sm font-medium">{label}</span>
       {children}
-      {hint && <span className="block text-xs text-gray-500">{hint}</span>}
+      {hint && <span className="block text-xs" style={{ color: "var(--color-text-muted)" }}>{hint}</span>}
     </label>
   );
 }

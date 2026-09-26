@@ -5,6 +5,7 @@ import { getStorage } from "@/lib/storage";
 import { handle, requireUserId } from "@/lib/api";
 import { parseCv } from "@/agents/cvParse";
 import { reviewCv } from "@/agents/cvReview";
+import { recordActivity } from "@/lib/gamification";
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -20,7 +21,7 @@ export async function GET() {
     const cvs = await db.cv.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
-      include: { review: { include: { issues: true } } },
+      include: { reviews: { orderBy: { createdAt: "desc" }, include: { issues: true } } },
     });
     return NextResponse.json({ cvs });
   });
@@ -55,15 +56,17 @@ export async function POST(req: NextRequest) {
         fileSizeBytes: file.size,
       },
     });
+    await recordActivity(userId, "CV_UPLOADED", { cvId: cv.id, fileName: file.name });
 
     // Parse + review inline for the scaffold. Move behind a queue (BullMQ,
     // Vercel Queues, ...) if you need this endpoint to respond immediately.
     await parseCv(cv.id);
     await reviewCv(cv.id);
+    await recordActivity(userId, "CV_REVIEWED", { cvId: cv.id });
 
     const withReview = await db.cv.findUniqueOrThrow({
       where: { id: cv.id },
-      include: { review: { include: { issues: true } } },
+      include: { reviews: { orderBy: { createdAt: "desc" }, include: { issues: true } } },
     });
 
     return NextResponse.json({ cv: withReview }, { status: 201 });

@@ -1,53 +1,114 @@
 import Link from "next/link";
 
+const SAMPLE_SIGNALS = [
+  { score: 92, title: "Staff Backend Engineer", company: "Passionfroot", tone: "secondary" as const },
+  { score: 74, title: "Senior Platform Engineer", company: "SoSafe", tone: "secondary" as const },
+  { score: 61, title: "Senior Fullstack Engineer", company: "Doctolib", tone: "accent" as const },
+  { score: 31, title: "QA Automation Engineer", company: "TransPerfect", tone: "accent" as const },
+];
+
 export default function LandingPage() {
   return (
-    <main className="flex-1 flex flex-col items-center px-6 py-20 gap-16 max-w-3xl mx-auto text-center">
-      <div className="space-y-4">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">AI Job Finder</h1>
-        <p className="text-lg text-gray-600 dark:text-gray-400">
-          Set up a search profile once. Every day, agents scan the job market, score every role against your CV,
-          and hand you a ranked shortlist — plus a few wildcards you wouldn&apos;t have searched for yourself.
-        </p>
-      </div>
+    <main className="flex-1 flex flex-col">
+      <section className="flex-1 flex items-center">
+        <div className="max-w-5xl mx-auto w-full px-6 py-20 grid lg:grid-cols-2 gap-12 items-center">
+          <div className="space-y-6">
+            <p className="eyebrow">Daily signal report</p>
+            <h1 className="font-display text-4xl sm:text-5xl font-semibold leading-[1.05]">
+              Every job market has a signal, buried in noise.
+            </h1>
+            <p className="text-lg max-w-md" style={{ color: "var(--color-text-muted)" }}>
+              Set up your search once. Every day, agents scan the market, score every role against your CV, and
+              hand you a ranked shortlist — plus a few wildcards you wouldn&apos;t have searched for yourself.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Link href="/register" className="btn-primary">
+                Get started
+              </Link>
+              <Link href="/login" className="btn-secondary">
+                Log in
+              </Link>
+            </div>
+          </div>
 
-      <div className="grid sm:grid-cols-3 gap-6 text-left w-full">
-        <Feature title="Ranked daily feed" body="Every match scored 0–100% with a one-line reason: strong skills fit, missing X, location matches." />
-        <Feature title="Wildcard picks" body="A few surprise roles outside your exact search that your skills would still crush." />
-        <Feature title="CV coaching" body="A rated CV review with concrete fixes, and one-click tailoring for any specific posting." />
-      </div>
+          <div className="card p-0 overflow-hidden">
+            <div
+              className="px-4 py-3 border-b flex items-center justify-between"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              <span className="eyebrow">Live readout</span>
+              <span className="font-data text-xs" style={{ color: "var(--color-text-muted)" }}>
+                4 signals detected
+              </span>
+            </div>
+            <div>
+              {SAMPLE_SIGNALS.map((s, i) => (
+                <div
+                  key={s.title}
+                  className="px-4 py-3.5 flex items-center justify-between gap-4"
+                  style={{ borderBottom: i < SAMPLE_SIGNALS.length - 1 ? "1px solid var(--color-border)" : undefined }}
+                >
+                  <div>
+                    <p className="text-sm font-medium">{s.title}</p>
+                    <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                      {s.company}
+                    </p>
+                  </div>
+                  <span
+                    className="font-data text-lg font-semibold shrink-0"
+                    style={{ color: s.tone === "secondary" ? "var(--color-secondary)" : "var(--color-accent)" }}
+                  >
+                    {s.score}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <div className="flex gap-4">
-        <Link
-          href="/register"
-          className="rounded-md bg-black text-white dark:bg-white dark:text-black px-5 py-2.5 font-medium hover:opacity-90"
-        >
-          Get started
-        </Link>
-        <Link
-          href="/login"
-          className="rounded-md border border-gray-300 dark:border-gray-700 px-5 py-2.5 font-medium hover:bg-gray-50 dark:hover:bg-gray-900"
-        >
-          Log in
-        </Link>
-      </div>
+      <section
+        className="border-t"
+        style={{ borderColor: "var(--color-border)", background: "var(--color-bg-elevated)" }}
+      >
+        <div className="max-w-5xl mx-auto px-6 py-16 grid sm:grid-cols-3 gap-8">
+          <Feature
+            eyebrow="Scoring"
+            title="Ranked daily feed"
+            body="Every match scored 0–100% with a one-line reason: strong skills fit, missing X, location matches."
+          />
+          <Feature
+            eyebrow="Discovery"
+            title="Wildcard picks"
+            body="A few surprise roles outside your exact search that your skills would still crush."
+          />
+          <Feature
+            eyebrow="Coaching"
+            title="CV intelligence"
+            body="A rated CV review with concrete fixes, one-click tailoring, and streaks and badges as you go."
+          />
+        </div>
+      </section>
 
-      <p className="text-sm text-gray-500">
+      <footer className="px-6 py-8 text-center text-sm" style={{ color: "var(--color-text-muted)" }}>
         Open source and self-hostable — see{" "}
         <a className="underline" href="https://github.com" target="_blank" rel="noreferrer">
           BUILD_SPEC.md
         </a>{" "}
         for the full architecture.
-      </p>
+      </footer>
     </main>
   );
 }
 
-function Feature({ title, body }: { title: string; body: string }) {
+function Feature({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-      <h3 className="font-semibold mb-1">{title}</h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400">{body}</p>
+    <div>
+      <p className="eyebrow">{eyebrow}</p>
+      <h3 className="font-display text-lg font-semibold mt-1 mb-1.5">{title}</h3>
+      <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+        {body}
+      </p>
     </div>
   );
 }
