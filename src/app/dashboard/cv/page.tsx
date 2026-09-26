@@ -1,6 +1,7 @@
 import { requireDashboardUserId } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { CvUploadForm } from "@/components/CvUploadForm";
+import { PendingReview } from "@/components/PendingReview";
 import { SetActiveCvButton } from "@/components/SetActiveCvButton";
 import { SignalBar } from "@/components/SignalBar";
 
@@ -116,9 +117,7 @@ export default async function CvPage() {
                   )}
                 </div>
               ) : (
-                <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-                  Review pending.
-                </p>
+                <PendingReview cvId={cv.id} createdAtMs={cv.createdAt.getTime()} />
               )}
             </div>
           );
