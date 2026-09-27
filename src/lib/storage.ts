@@ -6,6 +6,7 @@ import { getEnv } from "./env";
 export interface StorageAdapter {
   put(key: string, data: Buffer): Promise<void>;
   get(key: string): Promise<Buffer>;
+  delete(key: string): Promise<void>;
   url(key: string): string;
 }
 
@@ -31,6 +32,10 @@ class LocalStorageAdapter implements StorageAdapter {
 
   async get(key: string): Promise<Buffer> {
     return fs.readFile(this.resolve(key));
+  }
+
+  async delete(key: string): Promise<void> {
+    await fs.rm(this.resolve(key), { force: true });
   }
 
   url(key: string): string {
@@ -78,6 +83,9 @@ class S3StorageAdapter implements StorageAdapter {
     throw new Error("S3 storage adapter is not implemented yet — see BUILD_SPEC.md.");
   }
   get(): Promise<Buffer> {
+    throw new Error("S3 storage adapter is not implemented yet — see BUILD_SPEC.md.");
+  }
+  delete(): Promise<void> {
     throw new Error("S3 storage adapter is not implemented yet — see BUILD_SPEC.md.");
   }
   url(): string {

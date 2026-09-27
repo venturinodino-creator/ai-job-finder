@@ -2,6 +2,7 @@ import { requireDashboardUserId } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { CvUploadForm } from "@/components/CvUploadForm";
 import { PendingReview } from "@/components/PendingReview";
+import { DeleteCvButton } from "@/components/DeleteCvButton";
 import { SetActiveCvButton } from "@/components/SetActiveCvButton";
 import { SignalBar } from "@/components/SignalBar";
 
@@ -54,16 +55,19 @@ export default async function CvPage() {
                     Uploaded {cv.createdAt.toDateString()}
                   </p>
                 </div>
-                {profile?.activeCvId === cv.id ? (
-                  <span
-                    className="font-data text-xs font-medium rounded-full px-2.5 py-1"
-                    style={{ background: "var(--color-secondary-soft)", color: "var(--color-secondary)" }}
-                  >
-                    Active for search
-                  </span>
-                ) : profile ? (
-                  <SetActiveCvButton profileId={profile.id} cvId={cv.id} />
-                ) : null}
+                <div className="flex items-center gap-4">
+                  {profile?.activeCvId === cv.id ? (
+                    <span
+                      className="font-data text-xs font-medium rounded-full px-2.5 py-1"
+                      style={{ background: "var(--color-secondary-soft)", color: "var(--color-secondary)" }}
+                    >
+                      Active for search
+                    </span>
+                  ) : profile ? (
+                    <SetActiveCvButton profileId={profile.id} cvId={cv.id} />
+                  ) : null}
+                  <DeleteCvButton cvId={cv.id} fileName={cv.fileName} />
+                </div>
               </div>
 
               {review ? (
