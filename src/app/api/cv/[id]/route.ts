@@ -18,6 +18,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       select: { id: true, points: true },
     });
     const refund = events.reduce((sum, e) => sum + e.points, 0);
+    // Edited copies made for job applications live beside the upload; they go too.
+    const edited = await db.tailoredCv.findMany({
+      where: { cvId: id, editedStorageKey: { not: null } },
+      select: { editedStorageKey: true },
+    });
 
     await db.$transaction(async (tx) => {
       await tx.searchProfile.updateMany({ where: { activeCvId: id }, data: { activeCvId: null } });
@@ -36,10 +41,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
     // DB is the source of truth; an orphaned file is harmless, a dangling row
     // pointing at a missing file is not — so the file goes last, best-effort.
-    try {
-      await getStorage().delete(cv.storageKey);
-    } catch (err) {
-      console.warn(`Deleted CV ${id} but could not remove file ${cv.storageKey}:`, err);
+    const storage = getStorage();
+    for (const key of [cv.storageKey, ...edited.map((e) => e.editedStorageKey!)]) {
+      try {
+        await storage.delete(key);
+      } catch (err) {
+        console.warn(`Deleted CV ${id} but could not remove file ${key}:`, err);
+      }
     }
 
     return NextResponse.json({ ok: true });
