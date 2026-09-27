@@ -1,0 +1,19 @@
+# Keep the Docker build context to source only. The image installs its own
+# (Linux) node_modules in the deps stage and builds .next itself; shipping
+# the host copies made `COPY . .` take minutes and, worse, overwrote the
+# Linux node_modules with the host's platform-specific one.
+node_modules
+.next
+.git
+.github
+data
+.vercel
+.claude
+.claude-flow
+.agents
+.env
+.env.*
+!.env.example
+*.tmp.ts
+*.log
+docs
