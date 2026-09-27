@@ -76,6 +76,7 @@ async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
         industries: posting.industries,
         description: posting.description,
         url: posting.url,
+        applyEmail: extractApplyEmail(posting.description),
         postedAt: posting.postedAt,
         embedding: embedding ?? [],
       },
@@ -90,6 +91,7 @@ async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
         industries: posting.industries,
         description: posting.description,
         url: posting.url,
+        applyEmail: extractApplyEmail(posting.description),
       },
     });
 
@@ -103,6 +105,28 @@ async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
   });
 
   return { source: adapter.key, fetched: postings.length, created, updated };
+}
+
+const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+const NOT_FOR_APPLYING = /^(no-?reply|privacy|support|press|unsubscribe|dpo|legal|security|abuse|billing|help|newsletter)/i;
+
+/**
+ * Finds an address a candidate could apply to. Most boards only give a URL,
+ * but some postings say "send your CV to jobs@…" — those are the ones the
+ * in-app email apply can use. Prefers an address that sits near apply-ish
+ * wording; skips obvious non-recruiting mailboxes.
+ */
+export function extractApplyEmail(description: string): string | null {
+  const lower = description.toLowerCase();
+  const candidates = Array.from(new Set((description.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase()))).filter(
+    (e) => !NOT_FOR_APPLYING.test(e),
+  );
+  for (const email of candidates) {
+    const at = lower.indexOf(email);
+    const context = lower.slice(Math.max(0, at - 160), at + email.length + 40);
+    if (/apply|application|send|cv|resume|candidat|recruit|career|jobs?@/.test(context)) return email;
+  }
+  return candidates[0] ?? null;
 }
 
 function descriptionForEmbedding(posting: NormalizedJobPosting): string {

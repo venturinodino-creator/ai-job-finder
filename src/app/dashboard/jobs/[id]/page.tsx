@@ -5,6 +5,8 @@ import { markJobViewed } from "@/lib/jobs";
 import { TailorCvButton } from "@/components/TailorCvButton";
 import { MarkAppliedButton } from "@/components/MarkAppliedButton";
 import { JobDescription } from "@/components/JobDescription";
+import { ApplyPanel, type ApplicationView } from "@/components/ApplyPanel";
+import { isEmailConfigured } from "@/lib/email";
 import type { JobSummary } from "@/agents/jobSummary";
 
 interface TailorSuggestion {
@@ -23,13 +25,30 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   await markJobViewed(userId, id);
 
-  const [activeProfile, tailored, matches] = await Promise.all([
+  const [activeProfile, tailored, matches, application] = await Promise.all([
     db.searchProfile.findFirst({ where: { userId, isActive: true }, include: { activeCv: true } }),
     db.tailoredCv.findFirst({ where: { jobPostingId: id, cv: { userId } } }),
     db.matchScore.findMany({ where: { jobPostingId: id, profile: { userId } } }),
+    db.application.findUnique({
+      where: { userId_jobPostingId: { userId, jobPostingId: id } },
+      include: { tailoredCv: { select: { id: true } }, cv: { select: { id: true, fileName: true } } },
+    }),
   ]);
   const activeCv = activeProfile?.activeCv ?? null;
   const applied = matches.some((m) => m.appliedAt !== null);
+  const applicationView: ApplicationView | null = application
+    ? {
+        id: application.id,
+        status: application.status,
+        method: application.method,
+        subject: application.subject,
+        coverNote: application.coverNote,
+        sentTo: application.sentTo,
+        sentAt: application.sentAt?.toISOString() ?? null,
+        tailoredCv: application.tailoredCv,
+        cv: application.cv,
+      }
+    : null;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -51,6 +70,19 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         description={job.description}
         initialSummary={(job.summary as unknown as JobSummary | null) ?? null}
       />
+
+      <div className="space-y-4">
+        <h2 className="font-display text-lg font-semibold">Apply for this role</h2>
+        <ApplyPanel
+          jobId={job.id}
+          jobUrl={job.url}
+          applyEmail={job.applyEmail}
+          hasActiveCv={Boolean(activeCv)}
+          hasTailoredCv={Boolean(tailored?.document)}
+          emailEnabled={isEmailConfigured()}
+          initial={applicationView}
+        />
+      </div>
 
       <div className="space-y-4">
         <h2 className="font-display text-lg font-semibold">Tailor your CV to this job</h2>
