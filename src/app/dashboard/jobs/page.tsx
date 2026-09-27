@@ -4,6 +4,10 @@ import { db } from "@/lib/db";
 import { RefreshMatchesButton } from "@/components/RefreshMatchesButton";
 import { SignalBar } from "@/components/SignalBar";
 
+// Below this, a scored role isn't a "best match" — it's shown, but collapsed,
+// so a thin run doesn't dress up 22% roles as the day's top picks.
+const STRONG_MATCH_MIN = 60;
+
 export default async function JobsPage() {
   const userId = await requireDashboardUserId();
   const profile = await db.searchProfile.findFirst({ where: { userId, isActive: true }, orderBy: { createdAt: "asc" } });
@@ -31,6 +35,8 @@ export default async function JobsPage() {
 
   type Match = (typeof matches)[number];
   const main = matches.filter((m: Match) => !m.isWildcard);
+  const strong = main.filter((m: Match) => m.score >= STRONG_MATCH_MIN);
+  const other = main.filter((m: Match) => m.score < STRONG_MATCH_MIN);
   const wildcards = matches.filter((m: Match) => m.isWildcard);
 
   return (
@@ -50,12 +56,19 @@ export default async function JobsPage() {
         </p>
       )}
 
-      {main.length > 0 && (
+      {strong.length > 0 ? (
         <Section title="Best matches">
-          {main.map((m) => (
+          {strong.map((m) => (
             <JobCard key={m.id} match={m} />
           ))}
         </Section>
+      ) : (
+        matches.length > 0 && (
+          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+            No strong matches ({STRONG_MATCH_MIN}%+) in this run — the roles below are the closest the sources had.
+            Try &quot;Refresh matches now&quot; after the next ingest, or broaden your target roles.
+          </p>
+        )
       )}
 
       {wildcards.length > 0 && (
@@ -64,6 +77,22 @@ export default async function JobsPage() {
             <JobCard key={m.id} match={m} />
           ))}
         </Section>
+      )}
+
+      {other.length > 0 && (
+        <details className="group">
+          <summary
+            className="cursor-pointer font-display text-lg font-semibold list-none"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Other scored roles ({other.length}) <span className="text-sm font-normal">— show</span>
+          </summary>
+          <div className="space-y-3 pt-3">
+            {other.map((m) => (
+              <JobCard key={m.id} match={m} />
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );
