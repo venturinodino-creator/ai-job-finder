@@ -30,7 +30,7 @@ export function RefreshMatchesButton() {
           }
         }}
       >
-        {loading ? "Scoring today's jobs (this calls the LLM, can take ~30-60s)..." : "Refresh matches now"}
+        {loading ? "Scoring today's jobs against your profile — usually 1–3 minutes, keep this page open..." : "Refresh matches now"}
       </button>
       {error && <span className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</span>}
     </div>
