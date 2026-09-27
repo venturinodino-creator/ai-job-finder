@@ -2,6 +2,12 @@
   "name": "ai-job-finder",
   "version": "0.1.0",
   "private": true,
+  "allowScripts": {
+    "@prisma/engines": true,
+    "esbuild": true,
+    "prisma": true,
+    "unrs-resolver": true
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
