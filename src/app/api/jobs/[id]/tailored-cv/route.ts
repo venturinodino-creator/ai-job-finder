@@ -17,11 +17,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const requested = new URL(req.url).searchParams.get("format");
     const format = requested === "txt" ? "txt" : requested === "original" ? "original" : "docx";
 
-    const tailored = await db.tailoredCv.findFirst({
-      where: { jobPostingId, cv: { userId } },
-      orderBy: { createdAt: "desc" },
-      include: { jobPosting: { select: { company: true } }, cv: { select: { fileName: true } } },
+    // Serve the tailoring made for the currently active CV (see apply route).
+    const profile = await db.searchProfile.findFirst({
+      where: { userId, isActive: true },
+      select: { activeCv: { select: { id: true } } },
     });
+    const tailored = profile?.activeCv
+      ? await db.tailoredCv.findUnique({
+          where: { cvId_jobPostingId: { cvId: profile.activeCv.id, jobPostingId } },
+          include: { jobPosting: { select: { company: true } }, cv: { select: { fileName: true } } },
+        })
+      : null;
     if (!tailored) {
       throw new ApiError(404, "No tailored CV for this job yet — tailor it first.");
     }

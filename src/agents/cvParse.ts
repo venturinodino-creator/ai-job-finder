@@ -1,5 +1,6 @@
 import { z } from "zod";
 import mammoth from "mammoth";
+import { ApiError } from "@/lib/api";
 import { db } from "@/lib/db";
 import { embedOne } from "@/lib/embeddings";
 import { llmObject } from "@/lib/llm";
@@ -67,6 +68,9 @@ export async function parseCv(cvId: string): Promise<ParsedCv> {
   const buffer = await storage.get(cv.storageKey);
 
   const rawText = await extractText(buffer, cv.mimeType);
+  if (rawText.trim().length === 0) {
+    throw new ApiError(400, "No readable text was found in that file. If it's a scanned PDF, upload the Word or text version instead.");
+  }
 
   const parsed = await llmObject({
     schema: parsedCvSchema,

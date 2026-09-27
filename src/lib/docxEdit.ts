@@ -43,14 +43,30 @@ export async function applyEditsToDocx(original: Buffer, edits: DocxEdit[]): Pro
     }
     const plan: { paragraph: number; text: string }[] = [];
     const taken = new Set<number>();
+    const usable = (p: number) => !taken.has(p) && !replacements.has(p);
+    let matched = 0;
     for (const [before, after] of pairs) {
-      const hit = texts.findIndex((t, p) => !taken.has(p) && !replacements.has(p) && t.toLowerCase().includes(before.toLowerCase()));
-      if (hit === -1) break;
-      taken.add(hit);
-      const at = texts[hit].toLowerCase().indexOf(before.toLowerCase());
-      plan.push({ paragraph: hit, text: texts[hit].slice(0, at) + after + texts[hit].slice(at + before.length) });
+      const hit = texts.findIndex((t, p) => usable(p) && t.toLowerCase().includes(before.toLowerCase()));
+      if (hit !== -1) {
+        taken.add(hit);
+        const at = texts[hit].toLowerCase().indexOf(before.toLowerCase());
+        plan.push({ paragraph: hit, text: texts[hit].slice(0, at) + after + texts[hit].slice(at + before.length) });
+        matched++;
+        continue;
+      }
+      // The model sometimes quotes several consecutive bullets as one line.
+      // If `before` is exactly those bullets joined, spread the rewrite back
+      // over the same bullets sentence by sentence, keeping the bullet count.
+      const span = spanMatch(texts, before, usable);
+      const parts = span && distribute(after, span.map((p) => texts[p]));
+      if (!span || !parts) break;
+      span.forEach((p, k) => {
+        taken.add(p);
+        plan.push({ paragraph: p, text: parts[k] });
+      });
+      matched++;
     }
-    if (plan.length !== pairs.length) {
+    if (matched !== pairs.length) {
       notFound.push(index);
       return;
     }
@@ -78,6 +94,44 @@ function linePairs(edit: DocxEdit): [string, string][] | null {
   if (befores.length === 1 && afters.length === 1) return [[befores[0], afters[0]]];
   if (befores.length !== afters.length) return null;
   return befores.map((b, i) => [b, afters[i]]);
+}
+
+/** Indexes of 2–4 consecutive usable paragraphs whose joined text is `before`, or null. */
+function spanMatch(texts: string[], before: string, usable: (p: number) => boolean): number[] | null {
+  const want = before.toLowerCase().replace(/[.;]$/, "");
+  for (let i = 0; i < texts.length; i++) {
+    for (let n = 2; n <= 4 && i + n <= texts.length; n++) {
+      const span = Array.from({ length: n }, (_, k) => i + k);
+      if (span.some((p) => !usable(p) || texts[p] === "")) break;
+      const joined = span.map((p) => texts[p]).join(" ").toLowerCase().replace(/[.;]$/, "");
+      if (joined === want) return span;
+      if (!want.startsWith(texts[i].toLowerCase().replace(/[.;]$/, ""))) break;
+    }
+  }
+  return null;
+}
+
+/**
+ * Splits `after` back over the original paragraphs: each keeps as many
+ * sentences as it had (the last takes the rest). Null when there aren't
+ * enough sentences to give every paragraph one.
+ */
+function distribute(after: string, originals: string[]): string[] | null {
+  const sentences = splitSentences(after);
+  if (sentences.length < originals.length) return null;
+  const parts: string[] = [];
+  let cursor = 0;
+  originals.forEach((original, k) => {
+    const left = originals.length - k - 1;
+    const take = k === originals.length - 1 ? sentences.length - cursor : Math.min(splitSentences(original).length, sentences.length - cursor - left);
+    parts.push(sentences.slice(cursor, cursor + take).join(" "));
+    cursor += take;
+  });
+  return parts;
+}
+
+function splitSentences(text: string): string[] {
+  return normalize(text).split(/(?<=[.!?])\s+(?=[A-Z0-9€$£"(])/).filter(Boolean);
 }
 
 /** Concatenated, whitespace-normalised text of a paragraph's runs. */

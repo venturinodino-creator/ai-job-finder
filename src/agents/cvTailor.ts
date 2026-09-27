@@ -32,8 +32,12 @@ const tailorSchema = z.object({
   suggestions: z.array(
     z.object({
       section: z.string().describe("e.g. 'Summary', 'Experience — Acme Corp', 'Skills'."),
-      before: z.string().describe("The current text being changed, verbatim from the CV."),
-      after: z.string().describe("The rewritten text, as it appears in the tailored document."),
+      before: z
+        .string()
+        .describe(
+          "The current text being changed, verbatim from the CV. One CV paragraph or bullet per line — never merge separate bullets into one line; for several bullets, put each on its own line, in CV order.",
+        ),
+      after: z.string().describe("The rewritten text, one line per line of `before`, in the same order."),
       reason: z.string().describe("Why this change helps for this specific posting."),
     }),
   ),
@@ -67,7 +71,8 @@ export async function tailorCvForJob(cvId: string, jobPostingId: string) {
       "sections and bullets, rephrase bullets to foreground what this posting values, adopt the posting's " +
       "vocabulary only where the CV genuinely supports it, and trim what is irrelevant. If the posting wants " +
       "something the CV lacks, leave it out of the document and note the gap in `suggestions` instead. " +
-      "`suggestions` lists each substantive change you made (before → after → why).",
+      "`suggestions` lists each substantive change you made (before → after → why); quote `before` exactly as " +
+      "written, one paragraph or bullet per line, so each change can be applied inside the candidate's own file.",
     prompt: `Job posting:\nTitle: ${job.title}\nCompany: ${job.company}\nDescription: ${job.description.slice(0, 5000)}\n\nCandidate's current CV (the only source of truth):\n${cv.rawText.slice(0, 9000)}`,
   });
 

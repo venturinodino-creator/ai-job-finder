@@ -29,9 +29,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id: jobPostingId } = await params;
     const { accepted } = bodySchema.parse(await req.json().catch(() => ({})));
 
-    const tailored = await db.tailoredCv.findFirst({
-      where: { jobPostingId, cv: { userId } },
-      orderBy: { createdAt: "desc" },
+    // Always work on the tailoring made for the currently active CV, so a
+    // stale run against a previous upload can't be applied to the new file.
+    const profile = await db.searchProfile.findFirst({
+      where: { userId, isActive: true },
+      select: { activeCv: { select: { id: true } } },
+    });
+    if (!profile?.activeCv) throw new ApiError(400, "Upload a CV and set it active on your search profile first.");
+    const tailored = await db.tailoredCv.findUnique({
+      where: { cvId_jobPostingId: { cvId: profile.activeCv.id, jobPostingId } },
       include: { cv: true, jobPosting: { select: { company: true } } },
     });
     if (!tailored) throw new ApiError(404, "Tailor your CV to this job first.");

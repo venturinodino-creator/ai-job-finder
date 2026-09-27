@@ -22,13 +22,17 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   await markJobViewed(userId, id);
 
-  const [activeProfile, tailored, matches, application] = await Promise.all([
+  const [activeProfile, matches, application] = await Promise.all([
     db.searchProfile.findFirst({ where: { userId, isActive: true }, include: { activeCv: true } }),
-    db.tailoredCv.findFirst({ where: { jobPostingId: id, cv: { userId } } }),
     db.matchScore.findMany({ where: { jobPostingId: id, profile: { userId } } }),
     db.application.findUnique({ where: { userId_jobPostingId: { userId, jobPostingId: id } } }),
   ]);
   const activeCv = activeProfile?.activeCv ?? null;
+  // Tailoring belongs to a specific CV: after switching the active CV (e.g.
+  // PDF -> .docx) the old CV's suggestions must not be shown as applicable.
+  const tailored = activeCv
+    ? await db.tailoredCv.findUnique({ where: { cvId_jobPostingId: { cvId: activeCv.id, jobPostingId: id } } })
+    : null;
   const applied = matches.some((m) => m.appliedAt !== null);
   const applicationView: ApplicationView | null = application
     ? {
