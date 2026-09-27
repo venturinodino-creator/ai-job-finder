@@ -46,7 +46,7 @@ export function CvUploadForm() {
         className="btn-primary self-start"
         onClick={() => inputRef.current?.click()}
       >
-        {uploading ? "Uploading & reviewing (this calls the LLM, can take ~10-20s)..." : "Upload CV"}
+        {uploading ? "Uploading, reading and reviewing your CV — usually 1–2 minutes, keep this page open..." : "Upload CV"}
       </button>
     </div>
   );

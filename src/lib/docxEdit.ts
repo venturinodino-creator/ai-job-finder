@@ -74,6 +74,16 @@ export async function applyEditsToDocx(original: Buffer, edits: DocxEdit[]): Pro
     applied.push(index);
   });
 
+  // Text boxes and shapes carry their content twice (a modern copy and a
+  // compatibility fallback). Word shows the first; other readers use the
+  // second. Both must say the same thing, so a replacement also goes to any
+  // paragraph whose text is identical to the one edited.
+  for (const [i, text] of [...replacements]) {
+    texts.forEach((t, j) => {
+      if (j !== i && t === texts[i] && !replacements.has(j)) replacements.set(j, text);
+    });
+  }
+
   let cursor = 0;
   const updated = xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (paragraph) => {
     const i = cursor++;
@@ -81,7 +91,7 @@ export async function applyEditsToDocx(original: Buffer, edits: DocxEdit[]): Pro
     return text === undefined ? paragraph : rewriteParagraph(paragraph, text);
   });
 
-  zip.file("word/document.xml", updated);
+  zip.file("word/document.xml", updated, { createFolders: false });
   const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
   return { buffer, applied, notFound };
 }
@@ -96,11 +106,11 @@ function linePairs(edit: DocxEdit): [string, string][] | null {
   return befores.map((b, i) => [b, afters[i]]);
 }
 
-/** Indexes of 2–4 consecutive usable paragraphs whose joined text is `before`, or null. */
+/** Indexes of 2–8 consecutive usable paragraphs whose joined text is `before`, or null. */
 function spanMatch(texts: string[], before: string, usable: (p: number) => boolean): number[] | null {
   const want = before.toLowerCase().replace(/[.;]$/, "");
   for (let i = 0; i < texts.length; i++) {
-    for (let n = 2; n <= 4 && i + n <= texts.length; n++) {
+    for (let n = 2; n <= 8 && i + n <= texts.length; n++) {
       const span = Array.from({ length: n }, (_, k) => i + k);
       if (span.some((p) => !usable(p) || texts[p] === "")) break;
       const joined = span.map((p) => texts[p]).join(" ").toLowerCase().replace(/[.;]$/, "");
@@ -142,13 +152,51 @@ function paragraphText(paragraph: string): string {
   return normalize(parts.join(""));
 }
 
-/** Same paragraph properties, first run's formatting, one run of new text. */
+interface Run {
+  text: string;
+  rPr: string;
+}
+
+/**
+ * Same paragraph properties; the body formatting is that of the paragraph's
+ * longest run, and any run formatted differently (a bold figure, an italic
+ * name) keeps its formatting wherever its text survives in the new text.
+ */
 function rewriteParagraph(paragraph: string, text: string): string {
   const open = paragraph.match(/^<w:p\b[^>]*>/)![0];
   const pPr = paragraph.match(/<w:pPr>[\s\S]*?<\/w:pPr>/)?.[0] ?? "";
-  const firstRun = paragraph.match(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/)?.[0] ?? "";
-  const rPr = firstRun.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)?.[0] ?? "";
-  return `${open}${pPr}<w:r>${rPr}<w:t xml:space="preserve">${encode(text)}</w:t></w:r></w:p>`;
+  const runs: Run[] = [...paragraph.matchAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g)]
+    .map((m) => ({ text: runText(m[0]), rPr: m[0].match(/<w:rPr>[\s\S]*?<\/w:rPr>/)?.[0] ?? "" }))
+    .filter((r) => r.text.length > 0);
+  const base = runs.reduce<Run>((best, r) => (r.text.length > best.text.length ? r : best), { text: "", rPr: "" }).rPr;
+  const specials = runs
+    .filter((r) => r.rPr !== base && r.text.trim().length >= 2)
+    .map((r) => ({ text: r.text.trim(), rPr: r.rPr }))
+    .sort((a, b) => b.text.length - a.text.length);
+  const body = segment(text, specials, base)
+    .map((s) => `<w:r>${s.rPr}<w:t xml:space="preserve">${encode(s.text)}</w:t></w:r>`)
+    .join("");
+  return `${open}${pPr}${body}</w:p>`;
+}
+
+/** Splits `text` into runs: specially formatted snippets where they occur, body formatting elsewhere. */
+function segment(text: string, specials: Run[], base: string): Run[] {
+  for (const s of specials) {
+    const at = text.indexOf(s.text);
+    if (at === -1) continue;
+    return [
+      ...segment(text.slice(0, at), specials, base),
+      { text: s.text, rPr: s.rPr },
+      ...segment(text.slice(at + s.text.length), specials, base),
+    ];
+  }
+  return text.length > 0 ? [{ text, rPr: base }] : [];
+}
+
+function runText(run: string): string {
+  const parts: string[] = [];
+  for (const match of run.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)) parts.push(decode(match[1]));
+  return parts.join("");
 }
 
 function normalize(s: string): string {
