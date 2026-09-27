@@ -199,6 +199,10 @@ model TailoredCv {
   // TailoredCvDocument), rendered to .docx/.txt on download. Every fact in
   // it is provenance-checked against the uploaded CV's text.
   document      Json?
+  // The candidate's own uploaded .docx with the accepted changes applied in
+  // place (lib/docxEdit.ts) — their layout, their file. Preferred attachment.
+  editedStorageKey String?
+  editReport       Json? // { applied: number[], notFound: number[], generatedAt }
 
   createdAt DateTime @default(now())
 
@@ -237,12 +241,13 @@ model Application {
   tailoredCvId String?
   tailoredCv   TailoredCv? @relation(fields: [tailoredCvId], references: [id], onDelete: SetNull)
 
-  subject   String
-  coverNote String
-  method    ApplicationMethod?
-  status    ApplicationStatus  @default(DRAFT)
-  sentTo    String?
-  sentAt    DateTime?
+  subject          String
+  coverNote        String
+  method           ApplicationMethod?
+  status           ApplicationStatus  @default(DRAFT)
+  sentTo           String?
+  sentAt           DateTime?
+  attachedFileName String? // what was actually attached/handed over at send time
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

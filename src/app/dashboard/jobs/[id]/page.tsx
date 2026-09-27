@@ -6,15 +6,12 @@ import { TailorCvButton } from "@/components/TailorCvButton";
 import { MarkAppliedButton } from "@/components/MarkAppliedButton";
 import { JobDescription } from "@/components/JobDescription";
 import { ApplyPanel, type ApplicationView } from "@/components/ApplyPanel";
+import { TailorChanges, type TailorSuggestion, type EditReport } from "@/components/TailorChanges";
 import { isEmailConfigured } from "@/lib/email";
+import { describeAttachment } from "@/lib/applications";
 import type { JobSummary } from "@/agents/jobSummary";
 
-interface TailorSuggestion {
-  section: string;
-  before: string;
-  after: string;
-  reason: string;
-}
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,10 +26,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     db.searchProfile.findFirst({ where: { userId, isActive: true }, include: { activeCv: true } }),
     db.tailoredCv.findFirst({ where: { jobPostingId: id, cv: { userId } } }),
     db.matchScore.findMany({ where: { jobPostingId: id, profile: { userId } } }),
-    db.application.findUnique({
-      where: { userId_jobPostingId: { userId, jobPostingId: id } },
-      include: { tailoredCv: { select: { id: true } }, cv: { select: { id: true, fileName: true } } },
-    }),
+    db.application.findUnique({ where: { userId_jobPostingId: { userId, jobPostingId: id } } }),
   ]);
   const activeCv = activeProfile?.activeCv ?? null;
   const applied = matches.some((m) => m.appliedAt !== null);
@@ -45,10 +39,10 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         coverNote: application.coverNote,
         sentTo: application.sentTo,
         sentAt: application.sentAt?.toISOString() ?? null,
-        tailoredCv: application.tailoredCv,
-        cv: application.cv,
+        attachedFileName: application.attachedFileName,
       }
     : null;
+  const attachmentLabel = describeAttachment(activeCv, tailored ? { editedStorageKey: tailored.editedStorageKey } : null);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -78,7 +72,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           jobUrl={job.url}
           applyEmail={job.applyEmail}
           hasActiveCv={Boolean(activeCv)}
-          hasTailoredCv={Boolean(tailored?.document)}
+          attachmentLabel={attachmentLabel}
           emailEnabled={isEmailConfigured()}
           initial={applicationView}
         />
@@ -99,20 +93,26 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             {tailored.document ? (
               <div className="card space-y-3">
                 <div>
-                  <p className="text-sm font-medium">Your tailored CV is ready to review</p>
+                  <p className="text-sm font-medium">Proposed changes are ready to review</p>
                   <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
                     Rephrased, reordered and re-emphasised from your uploaded CV only — nothing was invented, and
-                    anything that couldn&apos;t be traced back to your CV was left out. Review it before you send it.
+                    anything that couldn&apos;t be traced back to your CV was left out. Tick the changes you want below
+                    and apply them to your own CV; its layout stays exactly as you made it.
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <a className="btn-primary" href={`/api/jobs/${job.id}/tailored-cv?format=docx`}>
-                    Download tailored CV (.docx)
-                  </a>
-                  <a className="btn-secondary" href={`/api/jobs/${job.id}/tailored-cv?format=txt`}>
-                    Plain text (.txt)
-                  </a>
-                </div>
+                <details>
+                  <summary className="cursor-pointer text-xs underline" style={{ color: "var(--color-text-muted)" }}>
+                    Plain-layout versions (not what gets attached)
+                  </summary>
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <a className="btn-secondary" href={`/api/jobs/${job.id}/tailored-cv?format=docx`}>
+                      Generated layout (.docx)
+                    </a>
+                    <a className="btn-secondary" href={`/api/jobs/${job.id}/tailored-cv?format=txt`}>
+                      Plain text (.txt)
+                    </a>
+                  </div>
+                </details>
               </div>
             ) : (
               tailored.rewrittenText && (
@@ -122,21 +122,13 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 </div>
               )
             )}
-            <p className="text-sm font-medium">What changed and why</p>
-            <div className="space-y-2">
-              {(tailored.suggestions as unknown as TailorSuggestion[]).map((s, i) => (
-                <div key={i} className="card text-sm">
-                  <p className="font-medium">{s.section}</p>
-                  <p className="line-through" style={{ color: "var(--color-text-muted)" }}>
-                    {s.before}
-                  </p>
-                  <p>{s.after}</p>
-                  <p className="mt-1" style={{ color: "var(--color-text-muted)" }}>
-                    Why: {s.reason}
-                  </p>
-                </div>
-              ))}
-            </div>
+            <TailorChanges
+              jobId={job.id}
+              suggestions={tailored.suggestions as unknown as TailorSuggestion[]}
+              cvIsDocx={activeCv?.mimeType === DOCX_MIME}
+              cvFileName={activeCv?.fileName ?? "your CV"}
+              initialReport={(tailored.editReport as unknown as EditReport | null) ?? null}
+            />
           </div>
         )}
       </div>

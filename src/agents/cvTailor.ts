@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { llmObject } from "@/lib/llm";
+import { stripUnsupportedClaims } from "./coverNote";
+import type { Prisma } from "@/generated/prisma/client";
 
 const tailoredDocumentSchema = z.object({
   name: z.string().describe("The candidate's name exactly as on the CV."),
@@ -70,25 +72,73 @@ export async function tailorCvForJob(cvId: string, jobPostingId: string) {
   });
 
   const { document, dropped } = enforceProvenance(result.document, cv.rawText);
+  const suggestions = sanitizeSuggestions(result.suggestions, cv.rawText);
   if (dropped.length > 0) {
     console.warn(`Tailored CV ${cvId} for job ${jobPostingId}: dropped unsupported items —`, dropped);
   }
 
+  const suggestionsJson = suggestions as unknown as Prisma.InputJsonValue;
   return db.tailoredCv.upsert({
     where: { cvId_jobPostingId: { cvId, jobPostingId } },
     create: {
       cvId,
       jobPostingId,
-      suggestions: result.suggestions,
+      suggestions: suggestionsJson,
       rewrittenText: result.rewrittenSummary,
       document,
     },
     update: {
-      suggestions: result.suggestions,
+      suggestions: suggestionsJson,
       rewrittenText: result.rewrittenSummary,
       document,
     },
   });
+}
+
+export interface TailorSuggestion {
+  section: string;
+  before: string;
+  after: string;
+  reason: string;
+  /** "edit" replaces CV text in place; "note" flags a gap the posting wants — nothing to apply. */
+  kind: "edit" | "note";
+}
+
+/**
+ * The same honesty rules as the document, applied to the edit list the
+ * candidate reviews and applies into their own CV:
+ * - a change whose original text isn't actually in the CV is a gap note,
+ *   not an edit (the model sometimes reports gaps in the same list);
+ * - a rewrite citing a figure the CV doesn't contain is dropped outright;
+ * - in skills lists, only items the CV supports survive.
+ */
+export function sanitizeSuggestions(
+  raw: { section: string; before: string; after: string; reason: string }[],
+  rawText: string,
+): TailorSuggestion[] {
+  const hay = rawText.toLowerCase().replace(/\s+/g, " ");
+  const out: TailorSuggestion[] = [];
+  for (const s of raw) {
+    const firstLine = s.before.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0] ?? "";
+    const inCv = firstLine.length > 0 && hay.includes(firstLine.toLowerCase().replace(/\s+/g, " "));
+    if (!inCv) {
+      out.push({ ...s, kind: "note" });
+      continue;
+    }
+    if (stripUnsupportedClaims(s.after, rawText).length < s.after.trim().length * 0.9) {
+      console.warn(`Tailoring: dropped a change to "${s.section}" — it cites a figure not in the CV.`);
+      continue;
+    }
+    if (/skill/i.test(s.section)) {
+      const items = s.after.split(/,|·|\|/).map((i) => i.trim()).filter(Boolean);
+      const kept = items.filter((i) => supported(i, hay));
+      if (kept.length === 0) continue;
+      out.push({ ...s, after: kept.join(", ") + (s.after.trim().endsWith(".") ? "." : ""), kind: "edit" });
+      continue;
+    }
+    out.push({ ...s, kind: "edit" });
+  }
+  return out;
 }
 
 /**

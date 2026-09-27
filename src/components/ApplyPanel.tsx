@@ -11,8 +11,7 @@ export interface ApplicationView {
   coverNote: string;
   sentTo: string | null;
   sentAt: string | null;
-  tailoredCv: { id: string } | null;
-  cv: { id: string; fileName: string } | null;
+  attachedFileName: string | null;
 }
 
 export function ApplyPanel({
@@ -20,7 +19,7 @@ export function ApplyPanel({
   jobUrl,
   applyEmail,
   hasActiveCv,
-  hasTailoredCv,
+  attachmentLabel,
   emailEnabled,
   initial,
 }: {
@@ -28,7 +27,7 @@ export function ApplyPanel({
   jobUrl: string;
   applyEmail: string | null;
   hasActiveCv: boolean;
-  hasTailoredCv: boolean;
+  attachmentLabel: string;
   emailEnabled: boolean;
   initial: ApplicationView | null;
 }) {
@@ -106,7 +105,7 @@ export function ApplyPanel({
           {app.status === "SENT" ? `Application sent to ${app.sentTo} on ${when}` : `Marked as applied on ${when} — via the company site`}
         </p>
         <p className="text-xs" style={muted}>
-          Attached: {app.tailoredCv ? "your tailored CV for this role (.docx)" : app.cv ? `your CV (${app.cv.fileName})` : "no CV"}.
+          Attached: {app.attachedFileName ?? "no CV"}.
         </p>
         <details>
           <summary className="cursor-pointer text-sm underline">Cover note</summary>
@@ -126,8 +125,8 @@ export function ApplyPanel({
           {busy === "prepare" ? "Drafting your application (calls the LLM, ~10s)..." : "Prepare my application"}
         </button>
         <p className="text-xs" style={muted}>
-          Attaches {hasTailoredCv ? "your tailored CV for this role" : "your CV (tailor it first for a closer fit)"} and drafts a short cover
-          note from it — nothing invented. You review everything before anything is sent.
+          Attaches {attachmentLabel} and drafts a short cover note — nothing invented. You review everything before
+          anything is sent.
         </p>
         {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
       </div>
@@ -138,7 +137,7 @@ export function ApplyPanel({
   return (
     <div className="card space-y-3">
       <p className="text-xs" style={muted}>
-        Attaching: {app.tailoredCv ? "your tailored CV for this role (.docx)" : app.cv ? `your CV (${app.cv.fileName})` : "no CV"}
+        Attaching: {attachmentLabel}
       </p>
       <label className="block space-y-1">
         <span className="text-sm font-medium">Subject</span>

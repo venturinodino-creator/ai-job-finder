@@ -3,7 +3,7 @@ import { ApiError } from "@/lib/api";
 import { getStorage } from "@/lib/storage";
 import { isEmailConfigured, sendApplicationEmail } from "@/lib/email";
 import { recordActivity } from "@/lib/gamification";
-import { renderCvDocx, renderCvText } from "@/lib/cvDocument";
+import { renderCvText } from "@/lib/cvDocument";
 import { generateCoverNote } from "@/agents/coverNote";
 import type { TailoredCvDocument } from "@/agents/cvTailor";
 import type { JobSummary } from "@/agents/jobSummary";
@@ -11,7 +11,7 @@ import type { ApplicationMethod } from "@/generated/prisma/client";
 
 const applicationInclude = {
   jobPosting: { select: { id: true, title: true, company: true, url: true, applyEmail: true } },
-  tailoredCv: { select: { id: true } },
+  tailoredCv: { select: { id: true, editedStorageKey: true } },
   cv: { select: { id: true, fileName: true } },
 } as const;
 
@@ -84,22 +84,32 @@ export async function sendApplication(userId: string, jobPostingId: string, meth
   }
 
   let sentTo: string | null = null;
+  let sentAttachmentName: string | undefined;
   if (method === "EMAIL") {
     if (!app.jobPosting.applyEmail) throw new ApiError(400, "This posting doesn't list an application email address.");
     if (!isEmailConfigured()) throw new ApiError(400, "Email sending isn't configured on this server yet.");
+    const attachment = await buildAttachment(app);
     await sendApplicationEmail({
       to: app.jobPosting.applyEmail,
       replyTo: app.user.email,
       subject: app.subject,
       text: app.coverNote,
-      attachment: await buildAttachment(app),
+      attachment,
     });
     sentTo = app.jobPosting.applyEmail;
+    sentAttachmentName = attachment?.filename;
   }
 
+  const attachment = method === "EMAIL" ? undefined : await buildAttachment(app);
   const updated = await db.application.update({
     where: { id: app.id },
-    data: { status: method === "EMAIL" ? "SENT" : "APPLIED", method, sentTo, sentAt: new Date() },
+    data: {
+      status: method === "EMAIL" ? "SENT" : "APPLIED",
+      method,
+      sentTo,
+      sentAt: new Date(),
+      attachedFileName: (method === "EMAIL" ? sentAttachmentName : attachment?.filename) ?? null,
+    },
     include: applicationInclude,
   });
 
@@ -112,19 +122,36 @@ export async function sendApplication(userId: string, jobPostingId: string, meth
   return updated;
 }
 
-async function buildAttachment(app: {
+/**
+ * What goes with the application: the candidate's own CV with the accepted
+ * changes applied in their layout if they generated one, otherwise the file
+ * they uploaded. The generated-layout document is never attached — its
+ * formatting isn't theirs.
+ */
+export async function buildAttachment(app: {
   jobPosting: { company: string };
   cv: { fileName: string; storageKey: string } | null;
-  tailoredCv: { document: unknown } | null;
+  tailoredCv: { editedStorageKey: string | null } | null;
 }): Promise<{ filename: string; content: Buffer } | undefined> {
-  if (app.tailoredCv?.document) {
-    const doc = app.tailoredCv.document as TailoredCvDocument;
-    return { filename: `${safeName(doc.name)} - CV - ${safeName(app.jobPosting.company)}.docx`, content: await renderCvDocx(doc) };
+  const storage = getStorage();
+  if (app.tailoredCv?.editedStorageKey && app.cv) {
+    const base = app.cv.fileName.replace(/\.docx$/i, "");
+    return {
+      filename: `${safeName(base)} - ${safeName(app.jobPosting.company)}.docx`,
+      content: await storage.get(app.tailoredCv.editedStorageKey),
+    };
   }
   if (app.cv) {
-    return { filename: app.cv.fileName, content: await getStorage().get(app.cv.storageKey) };
+    return { filename: app.cv.fileName, content: await storage.get(app.cv.storageKey) };
   }
   return undefined;
+}
+
+/** Label for the UI describing what buildAttachment() would attach right now. */
+export function describeAttachment(cv: { fileName: string } | null, tailoredCv: { editedStorageKey: string | null } | null): string {
+  if (!cv) return "no CV";
+  if (tailoredCv?.editedStorageKey) return `your CV with the accepted changes applied, in your own layout`;
+  return `your original CV (${cv.fileName})`;
 }
 
 function safeName(value: string): string {
