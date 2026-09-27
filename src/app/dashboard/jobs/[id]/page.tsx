@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { markJobViewed } from "@/lib/jobs";
 import { TailorCvButton } from "@/components/TailorCvButton";
 import { MarkAppliedButton } from "@/components/MarkAppliedButton";
+import { JobDescription } from "@/components/JobDescription";
+import type { JobSummary } from "@/agents/jobSummary";
 
 interface TailorSuggestion {
   section: string;
@@ -44,7 +46,11 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </div>
       </div>
 
-      <div className="card whitespace-pre-wrap text-sm">{job.description.slice(0, 4000)}</div>
+      <JobDescription
+        jobId={job.id}
+        description={job.description}
+        initialSummary={(job.summary as unknown as JobSummary | null) ?? null}
+      />
 
       <div className="space-y-4">
         <h2 className="font-display text-lg font-semibold">Tailor your CV to this job</h2>
@@ -58,12 +64,33 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
         {tailored && (
           <div className="space-y-3">
-            {tailored.rewrittenText && (
-              <div className="card">
-                <p className="text-sm font-medium mb-1">Suggested summary</p>
-                <p className="text-sm">{tailored.rewrittenText}</p>
+            {tailored.document ? (
+              <div className="card space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Your tailored CV is ready to review</p>
+                  <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
+                    Rephrased, reordered and re-emphasised from your uploaded CV only — nothing was invented, and
+                    anything that couldn&apos;t be traced back to your CV was left out. Review it before you send it.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <a className="btn-primary" href={`/api/jobs/${job.id}/tailored-cv?format=docx`}>
+                    Download tailored CV (.docx)
+                  </a>
+                  <a className="btn-secondary" href={`/api/jobs/${job.id}/tailored-cv?format=txt`}>
+                    Plain text (.txt)
+                  </a>
+                </div>
               </div>
+            ) : (
+              tailored.rewrittenText && (
+                <div className="card">
+                  <p className="text-sm font-medium mb-1">Suggested summary</p>
+                  <p className="text-sm">{tailored.rewrittenText}</p>
+                </div>
+              )
             )}
+            <p className="text-sm font-medium">What changed and why</p>
             <div className="space-y-2">
               {(tailored.suggestions as unknown as TailorSuggestion[]).map((s, i) => (
                 <div key={i} className="card text-sm">

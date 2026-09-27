@@ -192,7 +192,11 @@ model TailoredCv {
   jobPosting   JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
 
   suggestions   Json // ordered list of edits: {section, before, after, reason}
-  rewrittenText String? // optional full rewritten CV text/markdown
+  rewrittenText String? // tailored professional summary
+  // The complete tailored CV as structured sections (agents/cvTailor.ts
+  // TailoredCvDocument), rendered to .docx/.txt on download. Every fact in
+  // it is provenance-checked against the uploaded CV's text.
+  document      Json?
 
   createdAt DateTime @default(now())
 
@@ -242,6 +246,10 @@ model JobPosting {
   industries     String[]
   description    String
   url            String
+  // Cached LLM digest of the description (agents/jobSummary.ts): one-liner,
+  // responsibilities, must-haves, nice-to-haves, compensation, location.
+  // Generated on first view, so the raw wall of text isn't the default.
+  summary        Json?
 
   embedding Float[] // vector embedding of the normalized description
   postedAt  DateTime?

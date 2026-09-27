@@ -32,7 +32,7 @@ export function TailorCvButton({ jobId, cvId }: { jobId: string; cvId: string })
           }
         }}
       >
-        {loading ? "Tailoring (calls the LLM)..." : "Tailor my CV to this job"}
+        {loading ? "Tailoring your CV (calls the LLM, ~20-40s)..." : "Tailor my CV to this job"}
       </button>
       {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
     </div>

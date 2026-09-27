@@ -27,6 +27,7 @@
     "@vercel/blob": "^2.8.0",
     "ai": "^7.0.116",
     "bcryptjs": "^3.0.3",
+    "docx": "^9.7.2",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.12.3",
     "nanoid": "^6.0.1",
