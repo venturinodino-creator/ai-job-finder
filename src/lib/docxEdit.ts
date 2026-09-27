@@ -148,7 +148,7 @@ function splitSentences(text: string): string[] {
 function paragraphText(paragraph: string): string {
   const parts: string[] = [];
   for (const match of paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)) parts.push(decode(match[1]));
-  for (const _tab of paragraph.matchAll(/<w:tab\/>/g)) parts.push(" ");
+  parts.push(" ".repeat((paragraph.match(/<w:tab\/>/g) ?? []).length));
   return normalize(parts.join(""));
 }
 

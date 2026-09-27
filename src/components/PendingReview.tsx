@@ -12,18 +12,16 @@ const POLL_INTERVAL_MS = 3000;
 
 export function PendingReview({ cvId, createdAtMs }: { cvId: string; createdAtMs: number }) {
   const router = useRouter();
-  const [stale, setStale] = useState(false);
+  // Decided once at mount rather than inside the effect, so an already-stale
+  // review renders the retry UI on first paint instead of flashing the spinner.
+  const [stale, setStale] = useState(() => Date.now() - createdAtMs > STALE_AFTER_MS);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const isStale = () => Date.now() - createdAtMs > STALE_AFTER_MS;
-    if (isStale()) {
-      setStale(true);
-      return;
-    }
+    if (stale) return;
     const timer = setInterval(() => {
-      if (isStale()) {
+      if (Date.now() - createdAtMs > STALE_AFTER_MS) {
         setStale(true);
         clearInterval(timer);
         return;
@@ -31,7 +29,7 @@ export function PendingReview({ cvId, createdAtMs }: { cvId: string; createdAtMs
       router.refresh();
     }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [createdAtMs, router]);
+  }, [stale, createdAtMs, router]);
 
   async function retry() {
     setRetrying(true);
