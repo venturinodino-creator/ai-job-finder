@@ -125,11 +125,15 @@ export function TailorChanges({
             Nothing is added for these — it would be inventing experience. Worth knowing before you apply.
           </p>
           <ul className="text-sm list-disc pl-5 pt-1 space-y-0.5">
-            {notes.map((n, i) => (
-              <li key={i}>
-                <span className="font-medium">{n.section.replace(/^gap note\s*[—-]\s*/i, "")}:</span> {n.reason}
-              </li>
-            ))}
+            {notes.map((n, i) => {
+              const label = n.section.replace(/^gap\s*notes?\s*[:—-]?\s*/i, "").trim();
+              return (
+                <li key={i}>
+                  {label && <span className="font-medium">{label}: </span>}
+                  {n.reason}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

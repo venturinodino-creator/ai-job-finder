@@ -130,7 +130,7 @@ export function sanitizeSuggestions(
       continue;
     }
     if (/skill/i.test(s.section)) {
-      const items = s.after.split(/,|·|\|/).map((i) => i.trim()).filter(Boolean);
+      const items = s.after.split(/,|·|\|/).map((i) => i.trim().replace(/\.+$/, "")).filter(Boolean);
       const kept = items.filter((i) => supported(i, hay));
       if (kept.length === 0) continue;
       out.push({ ...s, after: kept.join(", ") + (s.after.trim().endsWith(".") ? "." : ""), kind: "edit" });
