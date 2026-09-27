@@ -3,26 +3,37 @@ import { requireDashboardUserId } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { RefreshMatchesButton } from "@/components/RefreshMatchesButton";
 import { SignalBar } from "@/components/SignalBar";
+import { CompanySearch, type CompanyPosting } from "@/components/CompanySearch";
+import { groupPostingsByCompany, parseCompanyQuery } from "@/lib/companySearch";
 
 // Below this, a scored role isn't a "best match" — it's shown, but collapsed,
 // so a thin run doesn't dress up 22% roles as the day's top picks.
 const STRONG_MATCH_MIN = 60;
 
-export default async function JobsPage() {
+type SearchParams = Promise<{ companies?: string | string[] }>;
+
+export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
   const userId = await requireDashboardUserId();
   const profile = await db.searchProfile.findFirst({ where: { userId, isActive: true }, orderBy: { createdAt: "asc" } });
 
+  const { companies: rawCompanies } = await searchParams;
+  const companyQuery = Array.isArray(rawCompanies) ? rawCompanies.join(", ") : (rawCompanies ?? "");
+  const companyGroups = rawCompanies === undefined ? null : await searchCompanies(rawCompanies, profile?.id ?? null);
+
   if (!profile) {
     return (
-      <div className="space-y-4">
-        <h1 className="font-display text-3xl font-semibold">Job feed</h1>
-        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-          Set up a{" "}
-          <Link href="/dashboard/profile" className="underline">
-            search profile
-          </Link>{" "}
-          first.
-        </p>
+      <div className="space-y-8">
+        <div className="space-y-4">
+          <h1 className="font-display text-3xl font-semibold">Job feed</h1>
+          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+            Set up a{" "}
+            <Link href="/dashboard/profile" className="underline">
+              search profile
+            </Link>{" "}
+            to get scored matches. You can still look up specific companies below.
+          </p>
+        </div>
+        <CompanySearch query={companyQuery} groups={companyGroups} />
       </div>
     );
   }
@@ -48,6 +59,8 @@ export default async function JobsPage() {
         </div>
         <RefreshMatchesButton />
       </div>
+
+      <CompanySearch query={companyQuery} groups={companyGroups} />
 
       {matches.length === 0 && (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
@@ -96,6 +109,48 @@ export default async function JobsPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Looks up every ingested posting from the requested companies (case-insensitive
+ * substring on the company field) and decorates each with the user's match
+ * score when their active profile has scored it. Returns one group per
+ * requested company so the UI can say "nothing open" for the empty ones.
+ */
+async function searchCompanies(raw: string | string[], profileId: string | null) {
+  const names = parseCompanyQuery(raw);
+  if (names.length === 0) return [];
+
+  const postings = await db.jobPosting.findMany({
+    where: { OR: names.map((name) => ({ company: { contains: name, mode: "insensitive" as const } })) },
+    orderBy: [{ postedAt: { sort: "desc", nulls: "last" } }, { fetchedAt: "desc" }],
+    take: 200,
+    select: {
+      id: true,
+      title: true,
+      company: true,
+      location: true,
+      remoteType: true,
+      postedAt: true,
+      source: { select: { name: true } },
+      matches: profileId
+        ? { where: { profileId }, select: { score: true, isWildcard: true, appliedAt: true }, take: 1 }
+        : false,
+    },
+  });
+
+  const flat: CompanyPosting[] = postings.map((p) => ({
+    id: p.id,
+    title: p.title,
+    company: p.company,
+    location: p.location,
+    remoteType: p.remoteType,
+    postedAt: p.postedAt,
+    source: p.source,
+    match: "matches" in p && Array.isArray(p.matches) && p.matches[0] ? p.matches[0] : null,
+  }));
+
+  return groupPostingsByCompany(names, flat);
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
