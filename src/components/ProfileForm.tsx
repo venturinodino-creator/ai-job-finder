@@ -48,6 +48,7 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
   const [currency, setCurrency] = useState(profile?.salaryCurrency ?? DEFAULT_CURRENCY);
   const [salaryMin, setSalaryMin] = useState(profile?.salaryMin?.toString() ?? "");
   const [salaryMax, setSalaryMax] = useState(profile?.salaryMax?.toString() ?? "");
+  const [expectsCommission, setExpectsCommission] = useState(profile?.expectsCommission ?? false);
   const [industries, setIndustries] = useState(profile?.industries.join(", ") ?? "");
   const [languages, setLanguages] = useState(profile?.languages.join(", ") ?? "");
   const [saving, setSaving] = useState(false);
@@ -83,6 +84,7 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
       salaryMin: minNum,
       salaryMax: maxNum,
       salaryCurrency: currency,
+      expectsCommission,
       industries: splitList(industries),
       languages: splitList(languages),
     };
@@ -180,7 +182,29 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
 
         <p className="font-data text-sm" style={{ color: "var(--color-text-muted)" }}>
           {describeRange(minNum, maxNum, currency)}
+          {expectsCommission && (minNum !== null || maxNum !== null) ? " + commission" : ""}
         </p>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            type="button"
+            aria-pressed={expectsCommission}
+            onClick={() => setExpectsCommission((v) => !v)}
+            className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+            style={
+              expectsCommission
+                ? { background: "var(--color-accent-soft)", borderColor: "var(--color-accent)", color: "var(--color-accent)" }
+                : { borderColor: "var(--color-border)", color: "var(--color-text-muted)" }
+            }
+          >
+            {expectsCommission ? "✓ Expects commission" : "Expects commission"}
+          </button>
+          <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+            {expectsCommission
+              ? "Roles offering commission / OTE on top of base will score higher."
+              : "Turn on if you expect commission or OTE on top of base salary."}
+          </span>
+        </div>
       </div>
 
       <Field label="Industries (optional)" hint="Comma-separated">

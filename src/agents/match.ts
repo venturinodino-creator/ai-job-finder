@@ -127,6 +127,9 @@ function buildProfileText(profile: SearchProfile, cv: Cv | null): string {
     profile.salaryMin || profile.salaryMax
       ? `Salary range: ${profile.salaryMin ?? "?"}-${profile.salaryMax ?? "?"} ${profile.salaryCurrency ?? ""}.`
       : null,
+    profile.expectsCommission
+      ? "Compensation: expects commission / variable pay (OTE, sales commission) on top of base salary — favour roles that offer it."
+      : null,
     profile.industries.length ? `Industries: ${profile.industries.join(", ")}.` : null,
     profile.languages.length ? `Languages: ${profile.languages.join(", ")}.` : null,
     cv?.rawText ? `CV:\n${cv.rawText.slice(0, 6000)}` : null,

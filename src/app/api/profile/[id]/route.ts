@@ -16,6 +16,7 @@ const updateSchema = z.object({
   salaryMin: z.number().int().nullable().optional(),
   salaryMax: z.number().int().nullable().optional(),
   salaryCurrency: z.string().nullable().optional(),
+  expectsCommission: z.boolean().optional(),
   industries: z.array(z.string()).optional(),
   languages: z.array(z.string()).optional(),
   activeCvId: z.string().nullable().optional(),

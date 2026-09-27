@@ -16,6 +16,7 @@ const profileSchema = z.object({
   salaryMin: z.number().int().nullable().optional(),
   salaryMax: z.number().int().nullable().optional(),
   salaryCurrency: z.string().nullable().optional(),
+  expectsCommission: z.boolean().default(false),
   industries: z.array(z.string()).default([]),
   languages: z.array(z.string()).default([]),
   activeCvId: z.string().nullable().optional(),

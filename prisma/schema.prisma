@@ -54,6 +54,9 @@ model SearchProfile {
   salaryMin      Int?
   salaryMax      Int?
   salaryCurrency String?    @default("USD")
+  // Sales-style roles: the user expects commission / variable pay (OTE) on
+  // top of base, so postings that offer it should score better.
+  expectsCommission Boolean @default(false)
   industries     String[]
   languages      String[] // spoken/working languages required or preferred
 
