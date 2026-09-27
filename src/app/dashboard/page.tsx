@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getGamificationSummary } from "@/lib/gamification";
 import { GamificationPanel } from "@/components/GamificationPanel";
 import { SignalBar } from "@/components/SignalBar";
+import { CompanySearch } from "@/components/CompanySearch";
 
 export default async function DashboardPage() {
   const userId = await requireDashboardUserId();
@@ -58,6 +59,9 @@ export default async function DashboardPage() {
 
         <GamificationPanel {...gamification} />
       </div>
+
+      {/* Submits to /dashboard/jobs, where the per-company results render. */}
+      <CompanySearch query="" groups={null} />
 
       {!profile && (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
