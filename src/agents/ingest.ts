@@ -7,32 +7,43 @@ export interface IngestSummary {
   source: string;
   fetched: number;
   created: number;
-  updated: number;
+  /** Already in the DB from an earlier run; left untouched. */
+  existing: number;
   error?: string;
 }
 
-/**
- * Runs every configured job-source adapter, upserts postings by
- * (sourceId, externalId), and embeds only the postings that are brand new
- * (existing postings keep their embedding — descriptions rarely change).
- * Intended to run once a day (see src/worker/index.ts).
- */
-export async function runIngest(): Promise<IngestSummary[]> {
-  const summaries: IngestSummary[] = [];
+// Sources are independent, so a few fetch/embed/insert pipelines run side by
+// side. Kept modest: the embedding API and the Postgres pool are shared.
+const SOURCE_CONCURRENCY = 4;
+const INSERT_CHUNK_SIZE = 100;
 
-  for (const adapter of jobSourceAdapters) {
-    const summary = await ingestOne(adapter);
-    summaries.push(summary);
+/**
+ * Runs every configured job-source adapter, inserts postings that are new by
+ * (sourceId, externalId), and embeds only those. Postings we already hold are
+ * left as they are — descriptions rarely change, and with ~30 sources a
+ * per-row upsert of everything would blow the cron's time budget.
+ * Intended to run once a day (see src/worker/index.ts, vercel.json).
+ */
+export async function runIngest(adapters: JobSourceAdapter[] = jobSourceAdapters): Promise<IngestSummary[]> {
+  const summaries: IngestSummary[] = new Array(adapters.length);
+  let next = 0;
+
+  async function worker() {
+    while (next < adapters.length) {
+      const i = next++;
+      summaries[i] = await ingestOne(adapters[i]);
+    }
   }
 
+  await Promise.all(Array.from({ length: Math.min(SOURCE_CONCURRENCY, adapters.length) }, worker));
   return summaries;
 }
 
 async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
   const source = await db.jobSource.upsert({
     where: { key: adapter.key },
-    create: { key: adapter.key, name: adapter.name, baseUrl: adapter.baseUrl, kind: "PUBLIC_API" },
-    update: { name: adapter.name, baseUrl: adapter.baseUrl },
+    create: { key: adapter.key, name: adapter.name, baseUrl: adapter.baseUrl, kind: adapter.kind ?? "PUBLIC_API" },
+    update: { name: adapter.name, baseUrl: adapter.baseUrl, kind: adapter.kind ?? "PUBLIC_API" },
   });
 
   let postings: NormalizedJobPosting[];
@@ -41,8 +52,13 @@ async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db.jobSource.update({ where: { id: source.id }, data: { lastError: message } });
-    return { source: adapter.key, fetched: 0, created: 0, updated: 0, error: message };
+    return { source: adapter.key, fetched: 0, created: 0, existing: 0, error: message };
   }
+
+  // A feed can repeat an id (e.g. the same posting under two locations); keep the first.
+  const unique = new Map<string, NormalizedJobPosting>();
+  for (const p of postings) if (!unique.has(p.externalId)) unique.set(p.externalId, p);
+  postings = Array.from(unique.values());
 
   const existing = await db.jobPosting.findMany({
     where: { sourceId: source.id, externalId: { in: postings.map((p) => p.externalId) } },
@@ -54,16 +70,11 @@ async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
   const embeddings = await safeEmbedBatch(newPostings.map(descriptionForEmbedding));
 
   let created = 0;
-  let updated = 0;
-
-  for (let i = 0; i < postings.length; i++) {
-    const posting = postings[i];
-    const isNew = !existingIds.has(posting.externalId);
-    const embedding = isNew ? embeddings[newPostings.indexOf(posting)] : undefined;
-
-    await db.jobPosting.upsert({
-      where: { sourceId_externalId: { sourceId: source.id, externalId: posting.externalId } },
-      create: {
+  for (let i = 0; i < newPostings.length; i += INSERT_CHUNK_SIZE) {
+    const chunk = newPostings.slice(i, i + INSERT_CHUNK_SIZE);
+    const result = await db.jobPosting.createMany({
+      skipDuplicates: true,
+      data: chunk.map((posting, j) => ({
         sourceId: source.id,
         externalId: posting.externalId,
         title: posting.title,
@@ -78,25 +89,10 @@ async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
         url: posting.url,
         applyEmail: extractApplyEmail(posting.description),
         postedAt: posting.postedAt,
-        embedding: embedding ?? [],
-      },
-      update: {
-        title: posting.title,
-        company: posting.company,
-        location: posting.location,
-        remoteType: posting.remoteType,
-        salaryMin: posting.salaryMin,
-        salaryMax: posting.salaryMax,
-        salaryCurrency: posting.salaryCurrency,
-        industries: posting.industries,
-        description: posting.description,
-        url: posting.url,
-        applyEmail: extractApplyEmail(posting.description),
-      },
+        embedding: embeddings[i + j] ?? [],
+      })),
     });
-
-    if (isNew) created++;
-    else updated++;
+    created += result.count;
   }
 
   await db.jobSource.update({
@@ -104,7 +100,7 @@ async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
     data: { lastFetchedAt: new Date(), lastError: null },
   });
 
-  return { source: adapter.key, fetched: postings.length, created, updated };
+  return { source: adapter.key, fetched: postings.length, created, existing: existingIds.size };
 }
 
 const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;

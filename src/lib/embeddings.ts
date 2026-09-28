@@ -20,13 +20,22 @@ export async function embedOne(text: string): Promise<number[]> {
   return embedding;
 }
 
+// OpenAI caps one embeddings request at 2048 inputs / ~300k tokens; a fresh
+// company board can hand us 100+ long postings at once, so chunk well below that.
+const EMBED_CHUNK_SIZE = 48;
+
 export async function embedBatch(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const { embeddings } = await embedMany({
-    model: getEmbeddingModel(),
-    values: texts.map((t) => t.slice(0, 8000)),
-  });
-  return embeddings;
+  const model = getEmbeddingModel();
+  const out: number[][] = [];
+  for (let i = 0; i < texts.length; i += EMBED_CHUNK_SIZE) {
+    const { embeddings } = await embedMany({
+      model,
+      values: texts.slice(i, i + EMBED_CHUNK_SIZE).map((t) => t.slice(0, 8000)),
+    });
+    out.push(...embeddings);
+  }
+  return out;
 }
 
 export function cosineSimilarity(a: number[], b: number[]): number {

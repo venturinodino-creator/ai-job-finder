@@ -32,6 +32,12 @@ const schema = z.object({
   S3_ENDPOINT: z.string().optional(),
 
   CRON_SECRET: z.string().optional(),
+
+  // Company career pages to ingest directly, comma-separated `slug` or
+  // `slug:Display Name`. Unset = curated defaults in agents/sources/companyBoards.ts.
+  GREENHOUSE_BOARDS: z.string().optional(),
+  LEVER_BOARDS: z.string().optional(),
+  ASHBY_BOARDS: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

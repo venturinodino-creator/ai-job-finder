@@ -5,11 +5,14 @@ import { getGamificationSummary } from "@/lib/gamification";
 import { GamificationPanel } from "@/components/GamificationPanel";
 import { SignalBar } from "@/components/SignalBar";
 import { CompanySearch } from "@/components/CompanySearch";
+import { IngestSourcesPanel } from "@/components/IngestSourcesPanel";
+import { buildSourceStatus } from "@/lib/sourceStatus";
+import { jobSourceAdapters } from "@/agents/sources";
 
 export default async function DashboardPage() {
   const userId = await requireDashboardUserId();
 
-  const [profile, cv, latestDigest, gamification] = await Promise.all([
+  const [profile, cv, latestDigest, gamification, sourceRows] = await Promise.all([
     db.searchProfile.findFirst({ where: { userId, isActive: true }, orderBy: { createdAt: "asc" } }),
     db.cv.findFirst({
       where: { userId },
@@ -18,8 +21,15 @@ export default async function DashboardPage() {
     }),
     db.dailyDigest.findFirst({ where: { userId }, orderBy: { digestDate: "desc" }, include: { entries: true } }),
     getGamificationSummary(userId),
+    db.jobSource.findMany({
+      select: { key: true, enabled: true, lastFetchedAt: true, lastError: true, _count: { select: { postings: true } } },
+    }),
   ]);
   const latestReview = cv?.reviews[0] ?? null;
+  const sources = buildSourceStatus(
+    jobSourceAdapters,
+    sourceRows.map((r) => ({ key: r.key, enabled: r.enabled, lastFetchedAt: r.lastFetchedAt, lastError: r.lastError, postings: r._count.postings })),
+  );
 
   return (
     <div className="space-y-8">
@@ -62,6 +72,8 @@ export default async function DashboardPage() {
 
       {/* Submits to /dashboard/jobs, where the per-company results render. */}
       <CompanySearch query="" groups={null} />
+
+      <IngestSourcesPanel sources={sources} />
 
       {!profile && (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>

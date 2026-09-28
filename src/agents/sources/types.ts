@@ -15,11 +15,15 @@ export interface NormalizedJobPosting {
   postedAt: Date | null;
 }
 
+export type JobSourceKind = "PUBLIC_API" | "RSS" | "COMPANY_BOARD";
+
 export interface JobSourceAdapter {
-  /** Stable key, matches JobSource.key in the DB (e.g. "remotive"). */
+  /** Stable key, matches JobSource.key in the DB (e.g. "remotive", "greenhouse:adyen"). */
   key: string;
   name: string;
   baseUrl: string;
+  /** Defaults to PUBLIC_API. Company career pages use COMPANY_BOARD. */
+  kind?: JobSourceKind;
   /** Fetch the latest postings. Adapters own their own pagination/limits. */
   fetch(): Promise<NormalizedJobPosting[]>;
 }
