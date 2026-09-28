@@ -38,9 +38,15 @@ export async function runDigestForUser(userId: string) {
     const wildcards = matches.filter((m: Match) => m.isWildcard).slice(0, WILDCARD_ENTRIES_PER_DIGEST);
 
     for (const match of [...main, ...wildcards]) {
-      await db.dailyDigestEntry.create({
-        data: { digestId: digest.id, profileId: profile.id, matchScoreId: match.id, rank: rank++ },
+      // A match has at most one digest entry (matchScoreId is unique), so a
+      // role that stays top-ranked across days moves into today's digest
+      // rather than blowing up on the constraint.
+      await db.dailyDigestEntry.upsert({
+        where: { matchScoreId: match.id },
+        create: { digestId: digest.id, profileId: profile.id, matchScoreId: match.id, rank: rank },
+        update: { digestId: digest.id, profileId: profile.id, rank: rank },
       });
+      rank++;
     }
   }
 

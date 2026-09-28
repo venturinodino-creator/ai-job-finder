@@ -62,9 +62,18 @@ export async function runMatchForProfile(profileId: string): Promise<number> {
     prompt: buildScoringPrompt(profileText, shortlist),
   });
 
-  const byId = new Map(scored.results.map((r) => [r.jobId, r]));
-  const mainCandidates = scored.results.filter((r) => !r.isWildcard).sort((a, b) => b.score - a.score);
-  const wildcardCandidates = scored.results.filter((r) => r.isWildcard).sort((a, b) => b.score - a.score);
+  // Only persist scores for postings we actually sent. The LLM occasionally
+  // returns an id it invented or mistyped; writing that would violate the
+  // MatchScore -> JobPosting foreign key and abort the whole run.
+  const shortlistIds = new Set(shortlist.map((job) => job.id));
+  const valid = scored.results.filter((r) => shortlistIds.has(r.jobId));
+  const dropped = scored.results.length - valid.length;
+  if (dropped > 0) {
+    console.warn(`[match] dropped ${dropped} scored result(s) with unknown job ids for profile ${profile.id}`);
+  }
+
+  const mainCandidates = valid.filter((r) => !r.isWildcard).sort((a, b) => b.score - a.score);
+  const wildcardCandidates = valid.filter((r) => r.isWildcard).sort((a, b) => b.score - a.score);
 
   const toPersist = [
     ...mainCandidates.slice(0, MAIN_MATCHES_PER_RUN),
@@ -72,7 +81,6 @@ export async function runMatchForProfile(profileId: string): Promise<number> {
   ];
 
   for (const result of toPersist) {
-    if (!byId.has(result.jobId)) continue;
     await db.matchScore.upsert({
       where: { profileId_jobPostingId: { profileId: profile.id, jobPostingId: result.jobId } },
       create: {
