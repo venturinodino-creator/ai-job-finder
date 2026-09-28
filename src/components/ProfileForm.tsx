@@ -52,6 +52,7 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
   const [industries, setIndustries] = useState(profile?.industries.join(", ") ?? "");
   const [languages, setLanguages] = useState(profile?.languages.join(", ") ?? "");
   const [saving, setSaving] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "rescoring">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const cur = CURRENCIES.find((c) => c.code === currency) ?? { code: currency, max: 300_000, step: 1_000 };
@@ -97,11 +98,29 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save profile.");
+
+      if (!data.rescore) {
+        router.refresh();
+        return;
+      }
+
+      // The criteria changed, so the feed is re-scored right away (same call
+      // as "Refresh matches now") and we land on it when the run finishes.
+      setPhase("rescoring");
+      const run = await fetch("/api/digest/run", { method: "POST" });
+      if (!run.ok) {
+        const runData = await run.json().catch(() => ({}));
+        throw new Error(
+          `Profile saved, but re-scoring failed: ${runData.error ?? run.statusText}. Use "Refresh matches now" on the job feed.`,
+        );
+      }
+      router.push("/dashboard/jobs");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save profile.");
     } finally {
       setSaving(false);
+      setPhase("idle");
     }
   }
 
@@ -218,8 +237,19 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
       {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
       <button type="submit" disabled={saving} className="btn-primary">
-        {saving ? "Saving..." : profile ? "Save changes" : "Create search profile"}
+        {phase === "rescoring"
+          ? "Saved — re-scoring the job feed for your new criteria (30-120s)..."
+          : saving
+            ? "Saving..."
+            : profile
+              ? "Save changes"
+              : "Create search profile"}
       </button>
+      {phase === "rescoring" && (
+        <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+          You&apos;ll be taken to the job feed when the new matches are ready.
+        </p>
+      )}
     </form>
   );
 }

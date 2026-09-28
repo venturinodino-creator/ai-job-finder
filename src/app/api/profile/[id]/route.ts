@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { ApiError, handle, requireUserId } from "@/lib/api";
+import { describeSnapshot, profileSnapshot, snapshotsDiffer } from "@/lib/profileSnapshot";
+import { recordSearch } from "@/lib/searchHistory";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -34,8 +36,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     await assertOwnership(id, userId);
     const body = updateSchema.parse(await req.json());
+    const before = await db.searchProfile.findUniqueOrThrow({ where: { id } });
     const profile = await db.searchProfile.update({ where: { id }, data: body });
-    return NextResponse.json({ profile });
+
+    // A change to anything the match agent looks at (roles, locations,
+    // remote preference, seniority, salary, industries, languages, CV) makes
+    // the current scores stale. Drop the ones the user hasn't acted on, log
+    // the new criteria in the archive, and tell the client to re-score so
+    // the feed reflects the new search without a manual refresh.
+    const rescore = snapshotsDiffer(profileSnapshot(before), profileSnapshot(profile));
+    if (rescore) {
+      const snapshot = profileSnapshot(profile);
+      await db.matchScore.deleteMany({ where: { profileId: id, appliedAt: null } });
+      await recordSearch(userId, "PROFILE_CHANGE", describeSnapshot(snapshot), { ...snapshot });
+    }
+
+    return NextResponse.json({ profile, rescore });
   });
 }
 

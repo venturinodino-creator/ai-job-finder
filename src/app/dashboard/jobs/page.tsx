@@ -5,6 +5,8 @@ import { RefreshMatchesButton } from "@/components/RefreshMatchesButton";
 import { SignalBar } from "@/components/SignalBar";
 import { CompanySearch, type CompanyPosting } from "@/components/CompanySearch";
 import { groupPostingsByCompany, parseCompanyQuery } from "@/lib/companySearch";
+import { listRecentSearches, recordSearch } from "@/lib/searchHistory";
+import { RecentSearchesCard } from "@/components/RecentSearchesCard";
 
 // Below this, a scored role isn't a "best match" — it's shown, but collapsed,
 // so a thin run doesn't dress up 22% roles as the day's top picks.
@@ -19,6 +21,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const { companies: rawCompanies } = await searchParams;
   const companyQuery = Array.isArray(rawCompanies) ? rawCompanies.join(", ") : (rawCompanies ?? "");
   const companyGroups = rawCompanies === undefined ? null : await searchCompanies(rawCompanies, profile?.id ?? null);
+  if (companyGroups && companyGroups.length > 0) {
+    const names = companyGroups.map((g) => g.name);
+    await recordSearch(userId, "COMPANY_SEARCH", names.join(", "), { companies: names });
+  }
+  const recentSearches = await listRecentSearches(userId, 6);
 
   if (!profile) {
     return (
@@ -34,6 +41,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
           </p>
         </div>
         <CompanySearch query={companyQuery} groups={companyGroups} />
+      <RecentSearchesCard searches={recentSearches} compact />
       </div>
     );
   }
@@ -61,6 +69,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
       </div>
 
       <CompanySearch query={companyQuery} groups={companyGroups} />
+      <RecentSearchesCard searches={recentSearches} compact />
 
       {matches.length === 0 && (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>

@@ -31,8 +31,33 @@ model User {
   achievements   UserAchievement[]
   activityEvents ActivityEvent[]
   applications   Application[]
+  searchHistory  SearchHistory[]
 
   @@map("users")
+}
+
+enum SearchHistoryKind {
+  COMPANY_SEARCH // the company search box on the job feed / overview
+  PROFILE_CHANGE // a saved search-profile change that re-scored the feed
+}
+
+// Archive of what the user searched for: company lookups and search-profile
+// snapshots. One row per distinct search; repeating the same search bumps
+// updatedAt instead of adding a duplicate (see src/lib/searchHistory.ts).
+model SearchHistory {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind   SearchHistoryKind
+  label  String // human-readable one-liner shown in the archive card
+  params Json // what to re-run: { companies: [...] } or a profile snapshot
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+  @@map("search_history")
 }
 
 // ---------------------------------------------------------------------------
