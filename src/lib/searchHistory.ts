@@ -4,10 +4,11 @@ import { db } from "@/lib/db";
 const KEEP_PER_USER = 50;
 
 /**
- * Records a search in the archive. Repeating the most recent identical search
- * (same kind + params) just bumps its timestamp, so reloading a results page
- * or saving a profile twice doesn't pile up duplicates. Trims the archive to
- * the last KEEP_PER_USER entries.
+ * Records a search in the archive. Repeating an identical search (same kind +
+ * params) — whether by reloading a results page, saving a profile twice, or
+ * re-running an entry from the archive card — bumps that entry to the top
+ * instead of adding a duplicate. Trims the archive to the last KEEP_PER_USER
+ * entries.
  */
 export async function recordSearch(
   userId: string,
@@ -15,13 +16,12 @@ export async function recordSearch(
   label: string,
   params: Prisma.InputJsonValue,
 ): Promise<void> {
-  const serialized = JSON.stringify(params);
-  const latest = await db.searchHistory.findFirst({
-    where: { userId, kind },
+  const existing = await db.searchHistory.findFirst({
+    where: { userId, kind, params: { equals: params } },
     orderBy: { updatedAt: "desc" },
   });
-  if (latest && JSON.stringify(latest.params) === serialized) {
-    await db.searchHistory.update({ where: { id: latest.id }, data: { label, updatedAt: new Date() } });
+  if (existing) {
+    await db.searchHistory.update({ where: { id: existing.id }, data: { label, updatedAt: new Date() } });
     return;
   }
 
