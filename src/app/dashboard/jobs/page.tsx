@@ -40,8 +40,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
             to get scored matches. You can still look up specific companies below.
           </p>
         </div>
-        <CompanySearch query={companyQuery} groups={companyGroups} />
-      <RecentSearchesCard searches={recentSearches} compact />
+        <CompanySearch
+        query={companyQuery}
+        groups={companyGroups}
+        afterForm={<RecentSearchesCard searches={recentSearches} compact />}
+      />
       </div>
     );
   }
@@ -68,8 +71,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         <RefreshMatchesButton />
       </div>
 
-      <CompanySearch query={companyQuery} groups={companyGroups} />
-      <RecentSearchesCard searches={recentSearches} compact />
+      <CompanySearch
+        query={companyQuery}
+        groups={companyGroups}
+        afterForm={<RecentSearchesCard searches={recentSearches} compact />}
+      />
 
       {matches.length === 0 && (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>

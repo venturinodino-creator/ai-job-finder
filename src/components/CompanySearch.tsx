@@ -20,6 +20,8 @@ interface Props {
   query: string;
   /** One group per requested company, in the order typed. Null when no search is active. */
   groups: CompanyGroup<CompanyPosting>[] | null;
+  /** Rendered between the form and the results, e.g. the recent-searches archive. */
+  afterForm?: React.ReactNode;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * submitting lands on /dashboard/jobs?companies=OpenAI,Anthropic and the
  * page does the lookup server-side.
  */
-export function CompanySearch({ query, groups }: Props) {
+export function CompanySearch({ query, groups, afterForm }: Props) {
   return (
     <section className="space-y-4">
       <form action="/dashboard/jobs" method="get" className="card space-y-2">
@@ -61,6 +63,8 @@ export function CompanySearch({ query, groups }: Props) {
           not just your scored matches.
         </p>
       </form>
+
+      {afterForm}
 
       {groups && groups.length === 0 && (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
