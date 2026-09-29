@@ -3,14 +3,18 @@ import { requireDashboardUserId } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { RefreshMatchesButton } from "@/components/RefreshMatchesButton";
 import { SignalBar } from "@/components/SignalBar";
+import { SignalStrip, type SignalReading } from "@/components/SignalStrip";
+import { FeedTabs, type FeedTab } from "@/components/FeedTabs";
+import { Reveal } from "@/components/Reveal";
 import { CompanySearch, type CompanyPosting } from "@/components/CompanySearch";
 import { groupPostingsByCompany, parseCompanyQuery } from "@/lib/companySearch";
 import { listRecentSearches, recordSearch } from "@/lib/searchHistory";
 import { RecentSearchesCard } from "@/components/RecentSearchesCard";
 
-// Below this, a scored role isn't a "best match" — it's shown, but collapsed,
-// so a thin run doesn't dress up 22% roles as the day's top picks.
+// Below this, a scored role isn't a "best match" — it's shown, but in its own
+// tab, so a thin run doesn't dress up 22% roles as the day's top picks.
 const STRONG_MATCH_MIN = 60;
+const BUCKETS = 10;
 
 type SearchParams = Promise<{ companies?: string | string[] }>;
 
@@ -31,6 +35,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     return (
       <div className="space-y-8">
         <div className="space-y-4">
+          <p className="eyebrow">Today&apos;s signal</p>
           <h1 className="font-display text-3xl font-semibold">Job feed</h1>
           <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
             Set up a{" "}
@@ -40,11 +45,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
             to get scored matches. You can still look up specific companies below.
           </p>
         </div>
-        <CompanySearch
-        query={companyQuery}
-        groups={companyGroups}
-        afterForm={<RecentSearchesCard searches={recentSearches} compact />}
-      />
+        <CompanySearch query={companyQuery} groups={companyGroups} afterForm={<RecentSearchesCard searches={recentSearches} compact />} />
       </div>
     );
   }
@@ -60,10 +61,46 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const strong = main.filter((m: Match) => m.score >= STRONG_MATCH_MIN);
   const other = main.filter((m: Match) => m.score < STRONG_MATCH_MIN);
   const wildcards = matches.filter((m: Match) => m.isWildcard);
+  const applied = matches.filter((m: Match) => m.appliedAt !== null).length;
+  const lastRun = matches.reduce<Date | null>((latest, m) => (!latest || m.createdAt > latest ? m.createdAt : latest), null);
+
+  const distribution = Array.from({ length: BUCKETS }, () => 0);
+  for (const m of main) distribution[Math.min(BUCKETS - 1, Math.floor(m.score / 10))] += 1;
+
+  const readings: SignalReading[] = [
+    { label: "Scored roles", value: main.length },
+    { label: `Strong (${STRONG_MATCH_MIN}%+)`, value: strong.length, tone: "secondary" },
+    { label: "Wildcards", value: wildcards.length, tone: "gamify" },
+    { label: "Applied", value: applied, tone: "accent" },
+  ];
+
+  const tabs: FeedTab[] = [
+    {
+      id: "best",
+      label: "Best matches",
+      count: strong.length,
+      note: `Roles scoring ${STRONG_MATCH_MIN}% or higher against your profile and CV.`,
+      content: strong.length > 0 ? <CardList matches={strong} /> : <EmptyGroup>No role reached {STRONG_MATCH_MIN}% in this run. The closest ones are under &quot;Other scored&quot;; refresh after the next ingest or broaden your target roles.</EmptyGroup>,
+    },
+    {
+      id: "wildcards",
+      label: "Wildcards",
+      count: wildcards.length,
+      note: "Outside your exact targets, but a genuinely strong skills fit — worth a look.",
+      content: wildcards.length > 0 ? <CardList matches={wildcards} /> : <EmptyGroup>No wildcards this run.</EmptyGroup>,
+    },
+    {
+      id: "other",
+      label: "Other scored",
+      count: other.length,
+      note: `Everything else the run scored, below ${STRONG_MATCH_MIN}%.`,
+      content: other.length > 0 ? <CardList matches={other} /> : <EmptyGroup>Nothing else was scored in this run.</EmptyGroup>,
+    },
+  ];
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Today&apos;s signal</p>
           <h1 className="font-display text-3xl font-semibold mt-1">Job feed</h1>
@@ -71,57 +108,27 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         <RefreshMatchesButton />
       </div>
 
-      <CompanySearch
-        query={companyQuery}
-        groups={companyGroups}
-        afterForm={<RecentSearchesCard searches={recentSearches} compact />}
-      />
-
-      {matches.length === 0 && (
-        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-          No matches yet. Make sure you&apos;ve uploaded a CV and set it active on your search profile, then hit
-          &quot;Refresh matches now&quot;.
-        </p>
-      )}
-
-      {strong.length > 0 ? (
-        <Section title="Best matches">
-          {strong.map((m) => (
-            <JobCard key={m.id} match={m} />
-          ))}
-        </Section>
+      {matches.length > 0 ? (
+        <Reveal>
+          <SignalStrip
+            readings={readings}
+            distribution={distribution}
+            strongFrom={STRONG_MATCH_MIN / 10}
+            caption={lastRun ? `Last scored ${formatRelative(lastRun)} · ${profile.targetRoles.join(", ") || "no target roles set"}` : ""}
+          />
+        </Reveal>
       ) : (
-        matches.length > 0 && (
-          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-            No strong matches ({STRONG_MATCH_MIN}%+) in this run — the roles below are the closest the sources had.
-            Try &quot;Refresh matches now&quot; after the next ingest, or broaden your target roles.
+        <div className="card" style={{ borderStyle: "dashed" }}>
+          <p className="font-medium">No matches yet</p>
+          <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
+            Upload a CV and set it active on your search profile, then choose &quot;Refresh matches now&quot; to score today&apos;s postings.
           </p>
-        )
+        </div>
       )}
 
-      {wildcards.length > 0 && (
-        <Section title="Wildcards 🎲">
-          {wildcards.map((m) => (
-            <JobCard key={m.id} match={m} />
-          ))}
-        </Section>
-      )}
+      <CompanySearch query={companyQuery} groups={companyGroups} afterForm={<RecentSearchesCard searches={recentSearches} compact />} />
 
-      {other.length > 0 && (
-        <details className="group">
-          <summary
-            className="cursor-pointer font-display text-lg font-semibold list-none"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            Other scored roles ({other.length}) <span className="text-sm font-normal">— show</span>
-          </summary>
-          <div className="space-y-3 pt-3">
-            {other.map((m) => (
-              <JobCard key={m.id} match={m} />
-            ))}
-          </div>
-        </details>
-      )}
+      {matches.length > 0 && <FeedTabs tabs={tabs} />}
     </div>
   );
 }
@@ -148,9 +155,7 @@ async function searchCompanies(raw: string | string[], profileId: string | null)
       remoteType: true,
       postedAt: true,
       source: { select: { name: true } },
-      matches: profileId
-        ? { where: { profileId }, select: { score: true, isWildcard: true, appliedAt: true }, take: 1 }
-        : false,
+      matches: profileId ? { where: { profileId }, select: { score: true, isWildcard: true, appliedAt: true }, take: 1 } : false,
     },
   });
 
@@ -168,31 +173,47 @@ async function searchCompanies(raw: string | string[], profileId: string | null)
   return groupPostingsByCompany(names, flat);
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <h2 className="font-display text-lg font-semibold">{title}</h2>
-      <div className="space-y-3">{children}</div>
-    </div>
-  );
+function formatRelative(date: Date): string {
+  const minutes = Math.round((Date.now() - date.getTime()) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} d ago`;
 }
 
 type MatchWithJob = Awaited<ReturnType<typeof db.matchScore.findMany>>[number] & {
   jobPosting: { title: string; company: string; location: string | null; remoteType: string; id: string; source: { name: string } };
 };
 
+function CardList({ matches }: { matches: MatchWithJob[] }) {
+  return (
+    <div className="space-y-3">
+      {matches.map((m, i) => (
+        <Reveal key={m.id} index={i}>
+          <JobCard match={m} />
+        </Reveal>
+      ))}
+    </div>
+  );
+}
+
+function EmptyGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="card text-sm" style={{ color: "var(--color-text-muted)", borderStyle: "dashed" }}>
+      {children}
+    </p>
+  );
+}
+
 function JobCard({ match }: { match: MatchWithJob }) {
   const job = match.jobPosting;
-  const tone = match.isWildcard ? "gamify" : match.score >= 60 ? "secondary" : "accent";
+  const tone = match.isWildcard ? "gamify" : match.score >= STRONG_MATCH_MIN ? "secondary" : "accent";
   return (
-    <Link
-      href={`/dashboard/jobs/${job.id}`}
-      className="card block transition-colors"
-      style={{ borderColor: "var(--color-border)" }}
-    >
+    <Link href={`/dashboard/jobs/${job.id}`} className="card card-link block">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <p className="font-medium">
               {job.title} <span style={{ color: "var(--color-text-muted)" }}>— {job.company}</span>
             </p>
@@ -206,7 +227,7 @@ function JobCard({ match }: { match: MatchWithJob }) {
             )}
           </div>
           <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-            {job.location ?? "Location n/a"} · {job.remoteType} · via {job.source.name}
+            {job.location ?? "Location n/a"} · {job.remoteType.replace("_", " ").toLowerCase()} · via {job.source.name}
           </p>
           <p className="text-sm mt-2">{match.explanation}</p>
           {match.wildcardReason && (

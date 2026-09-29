@@ -113,7 +113,7 @@ function CompanyJobCard({ job }: { job: CompanyPosting }) {
   const match = job.match;
   const tone = match?.isWildcard ? "gamify" : match && match.score >= 60 ? "secondary" : "accent";
   return (
-    <Link href={`/dashboard/jobs/${job.id}`} className="card block transition-colors">
+    <Link href={`/dashboard/jobs/${job.id}`} className="card card-link block">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">

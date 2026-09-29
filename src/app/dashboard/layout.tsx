@@ -3,6 +3,7 @@ import { requireDashboardUserId } from "@/lib/auth";
 import { touchDailyStreak, levelForPoints } from "@/lib/gamification";
 import { db } from "@/lib/db";
 import { LogoutButton } from "@/components/LogoutButton";
+import { NavPills } from "@/components/NavPills";
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "Overview" },
@@ -22,18 +23,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex-1 flex flex-col">
-      <header className="border-b" style={{ borderColor: "var(--color-border)" }}>
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4 gap-6">
-          <Link href="/dashboard" className="font-display text-lg font-semibold shrink-0">
+      <header className="app-header border-b" style={{ borderColor: "var(--color-border)" }}>
+        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-3 gap-6">
+          <Link href="/dashboard" className="font-display text-lg font-semibold shrink-0 flex items-center gap-2">
+            <span aria-hidden className="inline-flex items-end gap-[2px]">
+              {[3, 5, 8, 6].map((h, i) => (
+                <span key={i} className="w-1 rounded-[1px]" style={{ height: `${h * 2}px`, background: i === 3 ? "var(--color-accent)" : "var(--color-secondary)" }} />
+              ))}
+            </span>
             AI Job Finder
           </Link>
-          <nav className="flex items-center gap-5 text-sm overflow-x-auto">
-            {NAV_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="whitespace-nowrap hover:opacity-70 transition-opacity">
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          <NavPills items={NAV_LINKS} />
           <div className="flex items-center gap-4 shrink-0">
             {progress && (
               <Link
