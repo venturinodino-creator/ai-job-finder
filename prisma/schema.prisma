@@ -365,6 +365,9 @@ model MatchScore {
   missingSkills  String[]
   isWildcard     Boolean  @default(false)
   wildcardReason String?
+  // The posting names a place outside the profile's locations while the
+  // candidate needs on-site/hybrid work; scored with a penalty and labelled.
+  locationMismatch Boolean @default(false)
 
   viewedAt  DateTime? // first time the user opened this job's detail page
   appliedAt DateTime? // set when the user marks this job as applied

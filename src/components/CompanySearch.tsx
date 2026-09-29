@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CompanyGroup } from "@/lib/companySearch";
 import { MAX_COMPANIES } from "@/lib/companySearch";
 import { SignalBar } from "@/components/SignalBar";
+import { LocationTag } from "@/components/LocationTag";
 
 export interface CompanyPosting {
   id: string;
@@ -12,7 +13,7 @@ export interface CompanyPosting {
   postedAt: Date | null;
   source: { name: string };
   /** The user's match score for this posting, when their active profile has scored it. */
-  match: { score: number; isWildcard: boolean; appliedAt: Date | null } | null;
+  match: { score: number; isWildcard: boolean; appliedAt: Date | null; locationMismatch?: boolean } | null;
 }
 
 interface Props {
@@ -128,6 +129,7 @@ function CompanyJobCard({ job }: { job: CompanyPosting }) {
                 Applied
               </span>
             )}
+            {match?.locationMismatch && <LocationTag />}
           </div>
           <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
             {job.location ?? "Location n/a"} · {job.remoteType} · via {job.source.name}

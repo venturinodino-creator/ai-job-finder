@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { cosineSimilarity, embedOne } from "@/lib/embeddings";
 import { llmObject } from "@/lib/llm";
+import { isLocationMismatch, OUTSIDE_LOCATION_PENALTY } from "@/lib/locationFit";
 import type { SearchProfile, Cv, JobPosting, Seniority } from "@/generated/prisma/client";
 
 const CANDIDATE_POOL_SIZE = 40; // top-N by relevance, fed to the LLM
@@ -65,12 +66,27 @@ export async function runMatchForProfile(profileId: string): Promise<number> {
   // Only persist scores for postings we actually sent. The LLM occasionally
   // returns an id it invented or mistyped; writing that would violate the
   // MatchScore -> JobPosting foreign key and abort the whole run.
-  const shortlistIds = new Set(shortlist.map((job) => job.id));
-  const valid = scored.results.filter((r) => shortlistIds.has(r.jobId));
-  const dropped = scored.results.length - valid.length;
+  const shortlistById = new Map(shortlist.map((job) => [job.id, job]));
+  const dropped = scored.results.length - scored.results.filter((r) => shortlistById.has(r.jobId)).length;
   if (dropped > 0) {
     console.warn(`[match] dropped ${dropped} scored result(s) with unknown job ids for profile ${profile.id}`);
   }
+
+  // The rubric scores role fit and leaves location soft. When the candidate
+  // needs to be near the office, a posting elsewhere is docked here,
+  // deterministically, and labelled so the feed can say why it sank.
+  const valid = scored.results
+    .filter((r) => shortlistById.has(r.jobId))
+    .map((r) => {
+      const job = shortlistById.get(r.jobId)!;
+      const locationMismatch = isLocationMismatch(profile.locations, profile.remotePref, job.location, job.remoteType);
+      return {
+        ...r,
+        locationMismatch,
+        score: locationMismatch ? Math.max(0, Math.round(r.score) - OUTSIDE_LOCATION_PENALTY) : Math.round(r.score),
+        explanation: locationMismatch ? `Outside your locations (${job.location}). ${r.explanation}` : r.explanation,
+      };
+    });
 
   const mainCandidates = valid.filter((r) => !r.isWildcard).sort((a, b) => b.score - a.score);
   const wildcardCandidates = valid.filter((r) => r.isWildcard).sort((a, b) => b.score - a.score);
@@ -81,26 +97,19 @@ export async function runMatchForProfile(profileId: string): Promise<number> {
   ];
 
   for (const result of toPersist) {
+    const data = {
+      score: result.score,
+      explanation: result.explanation,
+      matchedSkills: result.matchedSkills,
+      missingSkills: result.missingSkills,
+      isWildcard: result.isWildcard,
+      wildcardReason: result.wildcardReason,
+      locationMismatch: result.locationMismatch,
+    };
     await db.matchScore.upsert({
       where: { profileId_jobPostingId: { profileId: profile.id, jobPostingId: result.jobId } },
-      create: {
-        profileId: profile.id,
-        jobPostingId: result.jobId,
-        score: Math.round(result.score),
-        explanation: result.explanation,
-        matchedSkills: result.matchedSkills,
-        missingSkills: result.missingSkills,
-        isWildcard: result.isWildcard,
-        wildcardReason: result.wildcardReason,
-      },
-      update: {
-        score: Math.round(result.score),
-        explanation: result.explanation,
-        matchedSkills: result.matchedSkills,
-        missingSkills: result.missingSkills,
-        isWildcard: result.isWildcard,
-        wildcardReason: result.wildcardReason,
-      },
+      create: { profileId: profile.id, jobPostingId: result.jobId, ...data },
+      update: data,
     });
   }
 
@@ -221,6 +230,9 @@ function lexicalRelevance(profile: SearchProfile, cv: Cv | null, job: JobPosting
     const loc = job.location.toLowerCase();
     if (profile.locations.some((l) => loc.includes(l.toLowerCase().trim()))) score += 3;
   }
+  // Someone who needs to be in the office shouldn't have the shortlist filled
+  // with postings on another continent when closer ones exist.
+  if (isLocationMismatch(profile.locations, profile.remotePref, job.location, job.remoteType)) score -= 8;
 
   return score;
 }
@@ -230,6 +242,9 @@ function buildProfileText(profile: SearchProfile, cv: Cv | null): string {
     `Target roles: ${profile.targetRoles.join(", ") || "any"}.`,
     `Locations: ${profile.locations.join(", ") || "any"}.`,
     `Remote preference: ${profile.remotePref}.`,
+    profile.locations.length > 0 && (profile.remotePref === "ON_SITE" || profile.remotePref === "HYBRID")
+      ? "The candidate needs to work from an office in the locations above; postings elsewhere are a poor practical fit unless fully remote."
+      : null,
     profile.seniority ? `Seniority: ${profile.seniority}.` : null,
     profile.salaryMin || profile.salaryMax
       ? `Salary range: ${profile.salaryMin ?? "?"}-${profile.salaryMax ?? "?"} ${profile.salaryCurrency ?? ""}.`

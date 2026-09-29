@@ -10,6 +10,7 @@ import { CompanySearch, type CompanyPosting } from "@/components/CompanySearch";
 import { groupPostingsByCompany, parseCompanyQuery } from "@/lib/companySearch";
 import { listRecentSearches, recordSearch } from "@/lib/searchHistory";
 import { RecentSearchesCard } from "@/components/RecentSearchesCard";
+import { LocationTag } from "@/components/LocationTag";
 
 // Below this, a scored role isn't a "best match" — it's shown, but in its own
 // tab, so a thin run doesn't dress up 22% roles as the day's top picks.
@@ -155,7 +156,7 @@ async function searchCompanies(raw: string | string[], profileId: string | null)
       remoteType: true,
       postedAt: true,
       source: { select: { name: true } },
-      matches: profileId ? { where: { profileId }, select: { score: true, isWildcard: true, appliedAt: true }, take: 1 } : false,
+      matches: profileId ? { where: { profileId }, select: { score: true, isWildcard: true, appliedAt: true, locationMismatch: true }, take: 1 } : false,
     },
   });
 
@@ -225,6 +226,7 @@ function JobCard({ match }: { match: MatchWithJob }) {
                 Applied
               </span>
             )}
+            {match.locationMismatch && <LocationTag />}
           </div>
           <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
             {job.location ?? "Location n/a"} · {job.remoteType.replace("_", " ").toLowerCase()} · via {job.source.name}
