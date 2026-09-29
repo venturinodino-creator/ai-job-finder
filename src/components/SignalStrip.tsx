@@ -70,13 +70,13 @@ export function SignalStrip({
             return (
               <div key={i} className="flex flex-col-reverse gap-[2px]" title={`${i * 10}–${i === 9 ? 100 : i * 10 + 9}: ${count}`}>
                 {Array.from({ length: BUCKET_ROWS }).map((_, row) => (
-                  <motion.span
+                  <span
                     key={row}
-                    className="block h-1.5 w-2.5 rounded-[1px]"
-                    style={{ background: row < filled ? (strong ? "var(--color-secondary)" : "var(--color-accent)") : "var(--color-border)" }}
-                    initial={reduceMotion || row >= filled ? false : { opacity: 0, scaleY: 0.4 }}
-                    animate={{ opacity: 1, scaleY: 1 }}
-                    transition={{ duration: 0.25, delay: 0.15 + i * 0.03 + row * 0.03 }}
+                    className={row < filled ? "signal-seg block h-1.5 w-2.5 rounded-[1px]" : "block h-1.5 w-2.5 rounded-[1px]"}
+                    style={{
+                      backgroundColor: row < filled ? (strong ? "var(--color-secondary)" : "var(--color-accent)") : "var(--color-border)",
+                      animationDelay: `${150 + i * 30 + row * 30}ms`,
+                    }}
                   />
                 ))}
               </div>

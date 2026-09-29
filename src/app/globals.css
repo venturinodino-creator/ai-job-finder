@@ -199,3 +199,21 @@ body {
     color: var(--color-text-muted);
   }
 }
+
+/* Histogram squares in the feed's signal strip settle in bottom-up, one
+   square at a time (delay set inline). The reduced-motion rule above
+   collapses the animation to an instant. */
+@keyframes signal-seg-in {
+  from {
+    opacity: 0.2;
+    transform: scaleY(0.35);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+.signal-seg {
+  transform-origin: bottom;
+  animation: signal-seg-in 0.3s ease-out both;
+}

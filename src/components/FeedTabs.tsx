@@ -51,7 +51,7 @@ export function FeedTabs({ tabs, defaultTab }: { tabs: FeedTab[]; defaultTab?: s
                   <motion.span
                     layoutId="feed-tab-pill"
                     className="absolute inset-0 rounded-md"
-                    style={{ background: "var(--color-bg-elevated)", boxShadow: "var(--shadow-card)" }}
+                    style={{ backgroundColor: "var(--color-bg-elevated)", boxShadow: "var(--shadow-card)" }}
                     transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 40 }}
                   />
                 )}

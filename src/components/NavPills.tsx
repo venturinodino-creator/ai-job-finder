@@ -15,13 +15,17 @@ export interface NavPillItem {
  * links (KokonutUI's morphic-navbar pattern, restyled to the app's tokens and
  * driven by the real route rather than local state).
  */
-export function NavPills({ items }: { items: NavPillItem[] }) {
+export function NavPills({ items, className }: { items: NavPillItem[]; className?: string }) {
   const pathname = usePathname();
   const reduceMotion = useReducedMotion();
   const isActive = (href: string) => (href === "/dashboard" ? pathname === href : pathname.startsWith(href));
 
   return (
-    <nav aria-label="Primary" className="flex items-center gap-0.5 overflow-x-auto rounded-lg p-1" style={{ background: "var(--color-bg)" }}>
+    <nav
+      aria-label="Primary"
+      className={cn("flex items-center gap-0.5 overflow-x-auto rounded-lg p-1", className)}
+      style={{ background: "var(--color-bg)" }}
+    >
       {items.map((item) => {
         const active = isActive(item.href);
         return (
@@ -39,7 +43,7 @@ export function NavPills({ items }: { items: NavPillItem[] }) {
               <motion.span
                 layoutId="nav-pill"
                 className="absolute inset-0 rounded-md"
-                style={{ background: "var(--color-accent)" }}
+                style={{ backgroundColor: "var(--color-accent)" }}
                 transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 42 }}
               />
             )}

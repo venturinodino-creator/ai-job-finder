@@ -24,7 +24,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex-1 flex flex-col">
       <header className="app-header border-b" style={{ borderColor: "var(--color-border)" }}>
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-3 gap-6">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between px-6 py-3 gap-x-6 gap-y-2">
           <Link href="/dashboard" className="font-display text-lg font-semibold shrink-0 flex items-center gap-2">
             <span aria-hidden className="inline-flex items-end gap-[2px]">
               {[3, 5, 8, 6].map((h, i) => (
@@ -33,7 +33,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </span>
             AI Job Finder
           </Link>
-          <NavPills items={NAV_LINKS} />
+          {/* Below md the nav drops to its own full-width row and scrolls sideways. */}
+          <NavPills items={NAV_LINKS} className="max-md:order-last max-md:w-full" />
           <div className="flex items-center gap-4 shrink-0">
             {progress && (
               <Link
