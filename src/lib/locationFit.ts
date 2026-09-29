@@ -54,6 +54,9 @@ const REGION_GROUPS: Record<string, string[]> = {
 };
 
 const REMOTE_WORDS = /\b(remote|anywhere|worldwide|work from home|wfh|distributed)\b/;
+// Some boards put a work mode where the place should be ("Hybrid", "On-site",
+// "Flexible"). That says nothing about where the office is.
+const WORK_MODE_ONLY = /^(hybrid|on[- ]?site|in[- ]?office|flexible|various|multiple( locations)?|n\/a|tbd)$/;
 
 function normalise(text: string): string {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
@@ -92,7 +95,7 @@ export function locationFit(
   if (wanted.length === 0) return "unconstrained";
   if (jobLocation && wanted.some((region) => placeMatchesRegion(jobLocation, region))) return "match";
   if (jobRemoteType === "REMOTE" || (jobLocation && REMOTE_WORDS.test(normalise(jobLocation)))) return "remote";
-  if (!jobLocation || !normalise(jobLocation)) return "unknown";
+  if (!jobLocation || !normalise(jobLocation) || WORK_MODE_ONLY.test(normalise(jobLocation))) return "unknown";
   return "outside";
 }
 

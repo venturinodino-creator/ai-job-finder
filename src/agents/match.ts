@@ -113,7 +113,42 @@ export async function runMatchForProfile(profileId: string): Promise<number> {
     });
   }
 
+  await reconcileLocationFlags(profile, new Set(toPersist.map((r) => r.jobId)));
+
   return toPersist.length;
+}
+
+/**
+ * A run only rewrites the postings it scored; older rows stay in the feed.
+ * Bring those in line with the profile's current location rule so a stale
+ * London role doesn't keep outranking today's flagged ones — and lift the
+ * penalty again if the profile has since gone remote or moved.
+ */
+async function reconcileLocationFlags(profile: SearchProfile, justScored: Set<string>): Promise<void> {
+  const rows = await db.matchScore.findMany({
+    where: { profileId: profile.id },
+    select: { id: true, jobPostingId: true, score: true, explanation: true, locationMismatch: true, jobPosting: { select: { location: true, remoteType: true } } },
+  });
+  const prefix = /^Outside your locations \([^)]*\)\. /;
+  for (const row of rows) {
+    if (justScored.has(row.jobPostingId)) continue;
+    const mismatch = isLocationMismatch(profile.locations, profile.remotePref, row.jobPosting.location, row.jobPosting.remoteType);
+    if (mismatch === row.locationMismatch) continue;
+    await db.matchScore.update({
+      where: { id: row.id },
+      data: mismatch
+        ? {
+            locationMismatch: true,
+            score: Math.max(0, row.score - OUTSIDE_LOCATION_PENALTY),
+            explanation: `Outside your locations (${row.jobPosting.location}). ${row.explanation}`,
+          }
+        : {
+            locationMismatch: false,
+            score: Math.min(100, row.score + OUTSIDE_LOCATION_PENALTY),
+            explanation: row.explanation.replace(prefix, ""),
+          },
+    });
+  }
 }
 
 /**

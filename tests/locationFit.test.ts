@@ -38,6 +38,8 @@ describe("locationFit", () => {
     expect(locationFit(["south africa"], "Remote - EMEA", "REMOTE")).toBe("remote");
     expect(locationFit(["south africa"], "Anywhere", "HYBRID")).toBe("remote");
     expect(locationFit(["south africa"], null, "ON_SITE")).toBe("unknown");
+    expect(locationFit(["south africa"], "Hybrid", "HYBRID")).toBe("unknown");
+    expect(locationFit(["south africa"], "On-site", "ON_SITE")).toBe("unknown");
     expect(locationFit(["south africa"], "London", "ON_SITE")).toBe("outside");
     expect(locationFit(["south africa"], "Bristol", "ANY")).toBe("outside");
   });
