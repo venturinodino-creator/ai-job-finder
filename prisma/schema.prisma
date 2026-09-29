@@ -52,6 +52,11 @@ model SearchHistory {
   kind   SearchHistoryKind
   label  String // human-readable one-liner shown in the archive card
   params Json // what to re-run: { companies: [...] } or a profile snapshot
+  // For PROFILE_CHANGE: the matches the feed showed for that search at the
+  // moment it was replaced (see src/lib/archivedResults.ts), so an old
+  // search can be browsed after the live feed has moved on.
+  results     Json?
+  resultCount Int   @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -3,8 +3,6 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { handle, requireUserId } from "@/lib/api";
 import { recordActivity } from "@/lib/gamification";
-import { describeSnapshot, profileSnapshot } from "@/lib/profileSnapshot";
-import { recordSearch } from "@/lib/searchHistory";
 
 const profileSchema = z.object({
   name: z.string().min(1).default("Default search"),
@@ -46,10 +44,8 @@ export async function POST(req: NextRequest) {
       await recordActivity(userId, "PROFILE_CREATED");
     }
 
-    const snapshot = profileSnapshot(profile);
-    await recordSearch(userId, "PROFILE_CHANGE", describeSnapshot(snapshot), { ...snapshot });
-
     // A brand-new profile has no scores yet; the client kicks off a match run.
+    // Nothing goes to the archive until this search is replaced by another.
     return NextResponse.json({ profile, rescore: true }, { status: 201 });
   });
 }

@@ -16,17 +16,16 @@ export function RecentSearchesCard({ searches, compact = false }: { searches: Re
   return (
     <div className="card flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <h3 className="font-semibold text-sm">Recent searches</h3>
-        {!compact && (
-          <span className="font-data text-[10px] uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
-            archive
-          </span>
-        )}
+        <h3 className="font-semibold text-sm">{compact ? "Recent searches" : "Search archive"}</h3>
+        <Link href="/dashboard/archive" className="text-xs underline" style={{ color: "var(--color-text-muted)" }}>
+          Open archive →
+        </Link>
       </div>
 
       {searches.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-          Nothing yet. Company searches and search-profile changes will show up here.
+          Nothing yet. Company searches, and each search profile you replace (with the matches it had), will show up
+          here.
         </p>
       ) : (
         <ul className="divide-y" style={{ borderColor: "var(--color-border)" }}>
@@ -62,7 +61,7 @@ function hrefFor(s: RecentSearch): string {
     const companies = (s.params as { companies?: string[] } | null)?.companies ?? [];
     return `/dashboard/jobs?companies=${encodeURIComponent(companies.join(", "))}`;
   }
-  return "/dashboard/profile";
+  return `/dashboard/archive#${s.id}`;
 }
 
 function relativeTime(date: Date): string {
