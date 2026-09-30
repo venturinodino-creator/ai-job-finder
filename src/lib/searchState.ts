@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { OUTSIDE_LOCATION_PENALTY } from "@/lib/locationFit";
 import { stageHref } from "@/lib/pipelineStages";
-import type { Cv, JobPosting, JobSource, MatchScore, SearchProfile } from "@/generated/prisma/client";
+import type { Cv, CvVerdict, JobPosting, JobSource, MatchScore, SearchProfile } from "@/generated/prisma/client";
 
 /** A scored role is a "strong match" from this score up; below it, it's shown but not led with. */
 export const STRONG_MATCH_MIN = 60;
@@ -28,9 +28,25 @@ export interface AttentionFlag {
   action: { label: string; href: string };
 }
 
+/** The health of the CV attached to the active profile, read from its latest review. */
+export interface CvHealth {
+  cvId: string;
+  /** The latest review's overall score, 0–100. */
+  score: number;
+  verdict: CvVerdict;
+  /** Score minus the previous review's score; null when this is the only review. */
+  change: number | null;
+  /** High-severity issues on the latest review. */
+  highIssues: number;
+  reviewedAt: Date;
+}
+
 export interface SearchState {
   profile: SearchProfile | null;
+  /** The CV attached to the active profile: the one used for matching. */
   activeCv: Cv | null;
+  /** Null without an active CV or before its first review. */
+  cvHealth: CvHealth | null;
   /** At most MAX_ATTENTION_FLAGS things that changed or are stuck, most important first; empty when nothing needs attention. */
   flags: AttentionFlag[];
   /** The stage the matches are narrowed to, or null for the whole search. */
@@ -66,7 +82,7 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
     include: { activeCv: true },
   });
   if (!profile) {
-    return { profile: null, activeCv: null, flags: [], stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
+    return { profile: null, activeCv: null, cvHealth: null, flags: [], stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
   }
   const { activeCv, ...profileRow } = profile;
 
@@ -77,12 +93,18 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
   });
   const postingIds = rows.map((m) => m.jobPostingId);
   const lastScoredAt = rows.reduce<Date | null>((latest, m) => (!latest || m.createdAt > latest ? m.createdAt : latest), null);
-  const [applications, tailored, latestReview, newPostings, failingSources] = await Promise.all([
+  const [applications, tailored, reviews, newPostings, failingSources] = await Promise.all([
     db.application.findMany({ where: { userId, jobPostingId: { in: postingIds } }, select: { jobPostingId: true, status: true } }),
     db.tailoredCv.findMany({ where: { jobPostingId: { in: postingIds }, cv: { userId } }, select: { jobPostingId: true } }),
+    // The latest two reviews of the active CV: the reading and what it changed from.
     activeCv
-      ? db.cvReview.findFirst({ where: { cvId: activeCv.id }, orderBy: { createdAt: "desc" }, select: { _count: { select: { issues: { where: { severity: "HIGH" } } } } } })
-      : null,
+      ? db.cvReview.findMany({
+          where: { cvId: activeCv.id },
+          orderBy: { createdAt: "desc" },
+          take: 2,
+          select: { overallScore: true, verdict: true, createdAt: true, _count: { select: { issues: { where: { severity: "HIGH" } } } } },
+        })
+      : [],
     lastScoredAt ? db.jobPosting.count({ where: { fetchedAt: { gt: lastScoredAt } } }) : 0,
     db.jobSource.count({ where: { enabled: true, lastError: { not: null } } }),
   ]);
@@ -131,7 +153,19 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
   // behind it; a count of zero means the condition doesn't hold.
   const strongUnopened = main.filter((m) => isStrong(m) && !isOpened(m)).length;
   const draftsUnsent = applications.filter((a) => a.status === "DRAFT").length;
-  const highIssues = latestReview?._count.issues ?? 0;
+  const [latestReview, previousReview] = reviews;
+  const cvHealth: CvHealth | null =
+    activeCv && latestReview
+      ? {
+          cvId: activeCv.id,
+          score: latestReview.overallScore,
+          verdict: latestReview.verdict,
+          change: previousReview ? latestReview.overallScore - previousReview.overallScore : null,
+          highIssues: latestReview._count.issues,
+          reviewedAt: latestReview.createdAt,
+        }
+      : null;
+  const highIssues = cvHealth?.highIssues ?? 0;
   const wouldBeStrong = pipeline.strong === 0 ? main.filter((m) => m.locationMismatch && m.score + OUTSIDE_LOCATION_PENALTY >= STRONG_MATCH_MIN).length : 0;
   const flags = attentionFlags([
     { kind: "strong-unopened", count: strongUnopened, statement: `${plural(strongUnopened, "strong match", "strong matches")} you haven't opened`, action: { label: "Open them", href: stageHref("/dashboard/jobs", "strong") } },
@@ -142,7 +176,7 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
     { kind: "source-errors", count: failingSources, statement: `${plural(failingSources, "job source", "job sources")} reporting an error`, action: { label: "Check sources", href: "/dashboard#sources" } },
   ]);
 
-  return { profile: profileRow, activeCv, flags, stage, matches, pipeline, distribution, lastScoredAt };
+  return { profile: profileRow, activeCv, cvHealth, flags, stage, matches, pipeline, distribution, lastScoredAt };
 }
 
 function attentionFlags(candidates: AttentionFlag[]): AttentionFlag[] {

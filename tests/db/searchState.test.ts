@@ -335,4 +335,68 @@ describe("searchState", () => {
       expect(await kinds(user.id)).toEqual([]);
     });
   });
+
+  describe("CV health", () => {
+    const day = 86_400_000;
+
+    it("is absent for a user with no CV attached to the active profile, even if they have a reviewed CV", async () => {
+      const user = await seedUser();
+      const cv = await seedCv(user.id);
+      await seedReview(cv.id, { overallScore: 80 });
+      await seedProfile(user.id); // no activeCvId
+
+      const state = await searchState(user.id);
+
+      expect(state.activeCv).toBeNull();
+      expect(state.cvHealth).toBeNull();
+    });
+
+    it("is absent while the active CV has no review yet, but the CV itself is reported", async () => {
+      const user = await seedUser();
+      const cv = await seedCv(user.id);
+      await seedProfile(user.id, { activeCvId: cv.id });
+
+      const state = await searchState(user.id);
+
+      expect(state.activeCv?.id).toBe(cv.id);
+      expect(state.cvHealth).toBeNull();
+    });
+
+    it("reads the only review's score and open high-severity issues, with no change figure", async () => {
+      const user = await seedUser();
+      const cv = await seedCv(user.id);
+      await seedReview(cv.id, { overallScore: 72, issues: ["HIGH", "MEDIUM", "HIGH", "LOW"] });
+      await seedProfile(user.id, { activeCvId: cv.id });
+
+      const { cvHealth } = await searchState(user.id);
+
+      expect(cvHealth).toMatchObject({ cvId: cv.id, score: 72, change: null, highIssues: 2, verdict: "GOOD" });
+    });
+
+    it("reports the change from the review before the latest, and the latest review's issues only", async () => {
+      const user = await seedUser();
+      const cv = await seedCv(user.id);
+      await seedReview(cv.id, { overallScore: 55, issues: ["HIGH", "HIGH"], createdAt: new Date(Date.now() - 3 * day) });
+      await seedReview(cv.id, { overallScore: 64, issues: ["HIGH"], createdAt: new Date(Date.now() - 2 * day) });
+      await seedReview(cv.id, { overallScore: 61, issues: [], createdAt: new Date(Date.now() - day) });
+      await seedProfile(user.id, { activeCvId: cv.id });
+
+      const { cvHealth } = await searchState(user.id);
+
+      expect(cvHealth).toMatchObject({ score: 61, change: -3, highIssues: 0 });
+    });
+
+    it("reads only the active CV, not a newer review of another CV", async () => {
+      const user = await seedUser();
+      const active = await seedCv(user.id);
+      await seedReview(active.id, { overallScore: 50, createdAt: new Date(Date.now() - 2 * day) });
+      const other = await seedCv(user.id);
+      await seedReview(other.id, { overallScore: 95, issues: ["HIGH"], createdAt: new Date() });
+      await seedProfile(user.id, { activeCvId: active.id });
+
+      const { cvHealth } = await searchState(user.id);
+
+      expect(cvHealth).toMatchObject({ cvId: active.id, score: 50, change: null, highIssues: 0 });
+    });
+  });
 });
