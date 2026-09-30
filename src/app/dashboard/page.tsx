@@ -57,7 +57,7 @@ export default async function DashboardPage() {
       </Reveal>
 
       <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           {/* Submits to /dashboard/jobs, where the per-company results render. */}
           <CompanySearch query="" groups={null} />
         </div>
@@ -65,7 +65,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           <IngestSourcesPanel sources={sources} />
         </div>
         <RecentSearchesCard searches={recentSearches} />
