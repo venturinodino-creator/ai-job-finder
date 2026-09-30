@@ -1,15 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireDashboardUserId } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { RefreshMatchesButton } from "@/components/RefreshMatchesButton";
 import { SignalBar } from "@/components/SignalBar";
 import { SignalStrip, type SignalReading } from "@/components/SignalStrip";
 import { FeedTabs, type FeedTab } from "@/components/FeedTabs";
 import { Reveal } from "@/components/Reveal";
-import { CompanySearch, type CompanyPosting } from "@/components/CompanySearch";
-import { groupPostingsByCompany, parseCompanyQuery } from "@/lib/companySearch";
-import { listRecentSearches, recordSearch } from "@/lib/searchHistory";
-import { RecentSearchesCard } from "@/components/RecentSearchesCard";
 import { LocationTag } from "@/components/LocationTag";
 import { PIPELINE_STAGE_LABELS, STRONG_MATCH_MIN, parseStage, searchState, type MatchWithJob } from "@/lib/searchState";
 import { formatRelative } from "@/lib/formatRelative";
@@ -19,34 +15,31 @@ type SearchParams = Promise<{ companies?: string | string[]; stage?: string | st
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
   const userId = await requireDashboardUserId();
   const { companies: rawCompanies, stage: rawStage } = await searchParams;
+  // Company search moved to its own view; old links keep working.
+  if (rawCompanies !== undefined) {
+    const query = Array.isArray(rawCompanies) ? rawCompanies.join(", ") : rawCompanies;
+    redirect(`/dashboard/jobs/companies?companies=${encodeURIComponent(query)}`);
+  }
   // An unknown stage value is simply the unfiltered view.
   const stage = parseStage(rawStage);
   const state = await searchState(userId, { stage });
   const { profile } = state;
 
-  const companyQuery = Array.isArray(rawCompanies) ? rawCompanies.join(", ") : (rawCompanies ?? "");
-  const companyGroups = rawCompanies === undefined ? null : await searchCompanies(rawCompanies, profile?.id ?? null);
-  if (companyGroups && companyGroups.length > 0) {
-    const names = companyGroups.map((g) => g.name);
-    await recordSearch(userId, "COMPANY_SEARCH", names.join(", "), { companies: names });
-  }
-  const recentSearches = await listRecentSearches(userId, 6);
-
   if (!profile) {
     return (
-      <div className="space-y-8">
-        <div className="space-y-4">
-          <p className="eyebrow">Today&apos;s signal</p>
-          <h1 className="font-display text-3xl font-semibold">Job feed</h1>
-          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-            Set up a{" "}
-            <Link href="/dashboard/profile" className="underline">
-              search profile
-            </Link>{" "}
-            to get scored matches. You can still look up specific companies below.
-          </p>
-        </div>
-        <CompanySearch query={companyQuery} groups={companyGroups} afterForm={<RecentSearchesCard searches={recentSearches} compact />} />
+      <div className="space-y-4">
+        <h1 className="font-display text-3xl font-semibold">Matches</h1>
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          Set up a{" "}
+          <Link href="/dashboard/profile" className="underline">
+            search profile
+          </Link>{" "}
+          to get scored matches. You can still{" "}
+          <Link href="/dashboard/jobs/companies" className="underline">
+            look up specific companies
+          </Link>
+          .
+        </p>
       </div>
     );
   }
@@ -96,10 +89,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Today&apos;s signal</p>
-          <h1 className="font-display text-3xl font-semibold mt-1">Job feed</h1>
-        </div>
+        <h1 className="font-display text-3xl font-semibold">Matches</h1>
         <RefreshMatchesButton />
       </div>
 
@@ -120,8 +110,6 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
           </p>
         </div>
       )}
-
-      <CompanySearch query={companyQuery} groups={companyGroups} afterForm={<RecentSearchesCard searches={recentSearches} compact />} />
 
       {hasMatches && stage && stageLabel && (
         <div
@@ -146,46 +134,6 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
       {hasMatches && <FeedTabs tabs={tabs} key={stage ?? "all"} />}
     </div>
   );
-}
-
-/**
- * Looks up every ingested posting from the requested companies (case-insensitive
- * substring on the company field) and decorates each with the user's match
- * score when their active profile has scored it. Returns one group per
- * requested company so the UI can say "nothing open" for the empty ones.
- */
-async function searchCompanies(raw: string | string[], profileId: string | null) {
-  const names = parseCompanyQuery(raw);
-  if (names.length === 0) return [];
-
-  const postings = await db.jobPosting.findMany({
-    where: { OR: names.map((name) => ({ company: { contains: name, mode: "insensitive" as const } })) },
-    orderBy: [{ postedAt: { sort: "desc", nulls: "last" } }, { fetchedAt: "desc" }],
-    take: 200,
-    select: {
-      id: true,
-      title: true,
-      company: true,
-      location: true,
-      remoteType: true,
-      postedAt: true,
-      source: { select: { name: true } },
-      matches: profileId ? { where: { profileId }, select: { score: true, isWildcard: true, appliedAt: true, locationMismatch: true }, take: 1 } : false,
-    },
-  });
-
-  const flat: CompanyPosting[] = postings.map((p) => ({
-    id: p.id,
-    title: p.title,
-    company: p.company,
-    location: p.location,
-    remoteType: p.remoteType,
-    postedAt: p.postedAt,
-    source: p.source,
-    match: "matches" in p && Array.isArray(p.matches) && p.matches[0] ? p.matches[0] : null,
-  }));
-
-  return groupPostingsByCompany(names, flat);
 }
 
 function CardList({ matches }: { matches: MatchWithJob[] }) {

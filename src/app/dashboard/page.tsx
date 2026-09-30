@@ -9,23 +9,19 @@ import { AttentionFlags } from "@/components/AttentionFlags";
 import { CvHealthCard } from "@/components/CvHealthCard";
 import { Pipeline } from "@/components/Pipeline";
 import { Reveal } from "@/components/Reveal";
-import { CompanySearch } from "@/components/CompanySearch";
 import { IngestSourcesPanel } from "@/components/IngestSourcesPanel";
 import { buildSourceStatus } from "@/lib/sourceStatus";
 import { jobSourceAdapters } from "@/agents/sources";
-import { listRecentSearches } from "@/lib/searchHistory";
-import { RecentSearchesCard } from "@/components/RecentSearchesCard";
 
 export default async function DashboardPage() {
   const userId = await requireDashboardUserId();
 
-  const [state, gamification, sourceRows, recentSearches] = await Promise.all([
+  const [state, gamification, sourceRows] = await Promise.all([
     searchState(userId),
     getGamificationSummary(userId),
     db.jobSource.findMany({
       select: { key: true, enabled: true, lastFetchedAt: true, lastError: true, _count: { select: { postings: true } } },
     }),
-    listRecentSearches(userId, 6),
   ]);
   const { profile, pipeline, lastScoredAt, flags, activeCv, cvHealth } = state;
   const sources = buildSourceStatus(
@@ -71,14 +67,6 @@ export default async function DashboardPage() {
       )}
 
       <ProgressStrip summary={gamification} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 min-w-0">
-          {/* Submits to /dashboard/jobs, where the per-company results render. */}
-          <CompanySearch query="" groups={null} />
-        </div>
-        <RecentSearchesCard searches={recentSearches} />
-      </div>
 
       <IngestSourcesPanel sources={sources} />
 

@@ -9,8 +9,7 @@ const NAV_LINKS = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/profile", label: "Search profile" },
   { href: "/dashboard/cv", label: "CV" },
-  { href: "/dashboard/jobs", label: "Job feed" },
-  { href: "/dashboard/archive", label: "Archive" },
+  { href: "/dashboard/jobs", label: "Jobs" },
   { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/dashboard/achievements", label: "Achievements" },
 ];

@@ -17,7 +17,7 @@ export function RecentSearchesCard({ searches, compact = false }: { searches: Re
     <div className="card flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <h3 className="font-semibold text-sm">{compact ? "Recent searches" : "Search archive"}</h3>
-        <Link href="/dashboard/archive" className="text-xs underline" style={{ color: "var(--color-text-muted)" }}>
+        <Link href="/dashboard/jobs/archive" className="text-xs underline" style={{ color: "var(--color-text-muted)" }}>
           Open archive →
         </Link>
       </div>
@@ -59,9 +59,9 @@ export function RecentSearchesCard({ searches, compact = false }: { searches: Re
 function hrefFor(s: RecentSearch): string {
   if (s.kind === "COMPANY_SEARCH") {
     const companies = (s.params as { companies?: string[] } | null)?.companies ?? [];
-    return `/dashboard/jobs?companies=${encodeURIComponent(companies.join(", "))}`;
+    return `/dashboard/jobs/companies?companies=${encodeURIComponent(companies.join(", "))}`;
   }
-  return `/dashboard/archive#${s.id}`;
+  return `/dashboard/jobs/archive#${s.id}`;
 }
 
 function relativeTime(date: Date): string {

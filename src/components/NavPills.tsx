@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 export interface NavPillItem {
   href: string;
   label: string;
+  /** Active only on this exact path, not on paths beneath it (for a section's own index). */
+  exact?: boolean;
 }
 
 /**
@@ -15,19 +17,29 @@ export interface NavPillItem {
  * links (KokonutUI's morphic-navbar pattern, restyled to the app's tokens and
  * driven by the real route rather than local state).
  */
-export function NavPills({ items, className }: { items: NavPillItem[]; className?: string }) {
+export function NavPills({
+  items,
+  className,
+  ariaLabel = "Primary",
+  layoutId = "nav-pill",
+}: {
+  items: NavPillItem[];
+  className?: string;
+  ariaLabel?: string;
+  layoutId?: string;
+}) {
   const pathname = usePathname();
   const reduceMotion = useReducedMotion();
-  const isActive = (href: string) => (href === "/dashboard" ? pathname === href : pathname.startsWith(href));
+  const isActive = (item: NavPillItem) => (item.exact || item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href));
 
   return (
     <nav
-      aria-label="Primary"
+      aria-label={ariaLabel}
       className={cn("flex items-center gap-0.5 overflow-x-auto rounded-lg p-1", className)}
       style={{ background: "var(--color-bg)" }}
     >
       {items.map((item) => {
-        const active = isActive(item.href);
+        const active = isActive(item);
         return (
           <Link
             key={item.href}
@@ -41,7 +53,7 @@ export function NavPills({ items, className }: { items: NavPillItem[]; className
           >
             {active && (
               <motion.span
-                layoutId="nav-pill"
+                layoutId={layoutId}
                 className="absolute inset-0 rounded-md"
                 style={{ backgroundColor: "var(--color-accent)" }}
                 transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 42 }}

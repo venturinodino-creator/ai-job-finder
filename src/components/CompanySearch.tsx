@@ -27,13 +27,13 @@ interface Props {
 
 /**
  * Plain GET form so the search is bookmarkable and works without JS:
- * submitting lands on /dashboard/jobs?companies=OpenAI,Anthropic and the
- * page does the lookup server-side.
+ * submitting lands on /dashboard/jobs/companies?companies=OpenAI,Anthropic
+ * and the page does the lookup server-side.
  */
 export function CompanySearch({ query, groups, afterForm }: Props) {
   return (
     <section className="space-y-4">
-      <form action="/dashboard/jobs" method="get" className="card space-y-2">
+      <form action="/dashboard/jobs/companies" method="get" className="card space-y-2">
         <label htmlFor="companies" className="block font-medium">
           Search specific companies
         </label>
@@ -53,7 +53,7 @@ export function CompanySearch({ query, groups, afterForm }: Props) {
               Search
             </button>
             {groups && (
-              <Link href="/dashboard/jobs" className="btn-secondary inline-flex items-center">
+              <Link href="/dashboard/jobs/companies" className="btn-secondary inline-flex items-center">
                 Clear
               </Link>
             )}
