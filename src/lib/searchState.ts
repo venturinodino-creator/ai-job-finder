@@ -3,8 +3,8 @@ import { OUTSIDE_LOCATION_PENALTY } from "@/lib/locationFit";
 import { stageHref } from "@/lib/pipelineStages";
 import type { Cv, CvVerdict, JobPosting, JobSource, MatchScore, SearchProfile } from "@/generated/prisma/client";
 
-/** A scored role is a "strong match" from this score up; below it, it's shown but not led with. */
-export const STRONG_MATCH_MIN = 60;
+import { STRONG_MATCH_MIN } from "@/lib/pipelineStages";
+export { STRONG_MATCH_MIN };
 /** The score distribution is drawn in ten-point buckets, 0–9 … 90–100. */
 export const DISTRIBUTION_BUCKETS = 10;
 

@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { listRecentSearches } from "@/lib/searchHistory";
 import { parseArchivedResults } from "@/lib/archivedResults";
 import { RestoreSearchButton } from "@/components/RestoreSearchButton";
-import { SignalBar } from "@/components/SignalBar";
+import { PostingCard } from "@/components/PostingCard";
+import { postingFromArchivedResult } from "@/lib/posting";
 
 /**
  * The archive: every previous search, newest first. Profile searches keep
@@ -69,29 +70,11 @@ export default async function ArchivePage() {
                       No scored matches were on the feed when this search was replaced.
                     </p>
                   ) : (
-                    <ul className="divide-y" style={{ borderColor: "var(--color-border)" }}>
+                    <div className="space-y-3">
                       {results.map((r) => (
-                        <li key={r.jobPostingId} className="py-3 flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Link href={`/dashboard/jobs/${r.jobPostingId}`} className="font-medium hover:underline">
-                                {r.title} <span style={{ color: "var(--color-text-muted)" }}>— {r.company}</span>
-                              </Link>
-                              {r.applied && <Badge tone="secondary">Applied</Badge>}
-                              {r.isWildcard && <Badge tone="gamify">Wildcard</Badge>}
-                            </div>
-                            <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-                              {r.location ?? "Location n/a"} · via {r.source} ·{" "}
-                              <a href={r.url} target="_blank" rel="noreferrer" className="underline">
-                                original posting
-                              </a>
-                            </p>
-                            <p className="text-sm mt-1">{r.explanation}</p>
-                          </div>
-                          <SignalBar value={r.score} tone={r.isWildcard ? "gamify" : r.score >= 60 ? "secondary" : "accent"} size="sm" />
-                        </li>
+                        <PostingCard key={r.jobPostingId} posting={postingFromArchivedResult(r)} />
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
               </details>
@@ -132,17 +115,6 @@ export default async function ArchivePage() {
         )}
       </section>
     </div>
-  );
-}
-
-function Badge({ tone, children }: { tone: "secondary" | "gamify"; children: React.ReactNode }) {
-  return (
-    <span
-      className="font-data text-[10px] font-medium uppercase tracking-wide rounded-full px-2 py-0.5"
-      style={{ background: `var(--color-${tone}-soft)`, color: `var(--color-${tone})` }}
-    >
-      {children}
-    </span>
   );
 }
 

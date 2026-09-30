@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatRelative } from "@/lib/formatRelative";
 
 export interface RecentSearch {
   id: string;
@@ -45,7 +46,7 @@ export function RecentSearchesCard({ searches, compact = false }: { searches: Re
                   {s.label}
                 </Link>
                 <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                  {relativeTime(s.updatedAt)}
+                  {formatRelative(s.updatedAt)}
                 </p>
               </div>
             </li>
@@ -62,16 +63,4 @@ function hrefFor(s: RecentSearch): string {
     return `/dashboard/jobs/companies?companies=${encodeURIComponent(companies.join(", "))}`;
   }
   return `/dashboard/jobs/archive#${s.id}`;
-}
-
-function relativeTime(date: Date): string {
-  const diff = Date.now() - date.getTime();
-  const min = Math.round(diff / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min} min ago`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `${h} h ago`;
-  const d = Math.round(h / 24);
-  if (d < 7) return `${d} d ago`;
-  return date.toISOString().slice(0, 10);
 }

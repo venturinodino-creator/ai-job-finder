@@ -1,6 +1,9 @@
 // The pipeline vocabulary on its own, with no database import, so client
 // components (the Pipeline steps) can share it with the Search state module.
 
+/** A scored role is a "strong match" from this score up; below it, it's shown but not led with. */
+export const STRONG_MATCH_MIN = 60;
+
 export interface PipelineCounts {
   /** Every match row of the current search, wildcards included. */
   scored: number;

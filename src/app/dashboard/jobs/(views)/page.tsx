@@ -2,11 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireDashboardUserId } from "@/lib/auth";
 import { RefreshMatchesButton } from "@/components/RefreshMatchesButton";
-import { SignalBar } from "@/components/SignalBar";
 import { SignalStrip, type SignalReading } from "@/components/SignalStrip";
 import { FeedTabs, type FeedTab } from "@/components/FeedTabs";
 import { Reveal } from "@/components/Reveal";
-import { LocationTag } from "@/components/LocationTag";
+import { PostingCard } from "@/components/PostingCard";
+import { postingFromMatch } from "@/lib/posting";
 import { PIPELINE_STAGE_LABELS, STRONG_MATCH_MIN, parseStage, searchState, type MatchWithJob } from "@/lib/searchState";
 import { formatRelative } from "@/lib/formatRelative";
 
@@ -141,7 +141,7 @@ function CardList({ matches }: { matches: MatchWithJob[] }) {
     <div className="space-y-3">
       {matches.map((m, i) => (
         <Reveal key={m.id} index={i}>
-          <JobCard match={m} />
+          <PostingCard posting={postingFromMatch(m)} />
         </Reveal>
       ))}
     </div>
@@ -153,42 +153,5 @@ function EmptyGroup({ children }: { children: React.ReactNode }) {
     <p className="card text-sm" style={{ color: "var(--color-text-muted)", borderStyle: "dashed" }}>
       {children}
     </p>
-  );
-}
-
-function JobCard({ match }: { match: MatchWithJob }) {
-  const job = match.jobPosting;
-  const tone = match.isWildcard ? "gamify" : match.score >= STRONG_MATCH_MIN ? "secondary" : "accent";
-  return (
-    <Link href={`/dashboard/jobs/${job.id}`} className="card card-link block">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-medium">
-              {job.title} <span style={{ color: "var(--color-text-muted)" }}>— {job.company}</span>
-            </p>
-            {match.appliedAt && (
-              <span
-                className="font-data text-[10px] font-medium uppercase tracking-wide rounded-full px-2 py-0.5"
-                style={{ background: "var(--color-secondary-soft)", color: "var(--color-secondary)" }}
-              >
-                Applied
-              </span>
-            )}
-            {match.locationMismatch && <LocationTag />}
-          </div>
-          <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-            {job.location ?? "Location n/a"} · {job.remoteType.replace("_", " ").toLowerCase()} · via {job.source.name}
-          </p>
-          <p className="text-sm mt-2">{match.explanation}</p>
-          {match.wildcardReason && (
-            <p className="text-sm mt-1" style={{ color: "var(--color-gamify)" }}>
-              Why a wildcard: {match.wildcardReason}
-            </p>
-          )}
-        </div>
-        <SignalBar value={match.score} tone={tone} />
-      </div>
-    </Link>
   );
 }

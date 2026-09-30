@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { CompanyGroup } from "@/lib/companySearch";
 import { MAX_COMPANIES } from "@/lib/companySearch";
-import { SignalBar } from "@/components/SignalBar";
-import { LocationTag } from "@/components/LocationTag";
+import { PostingCard } from "@/components/PostingCard";
+import { postingFromCompanyPosting } from "@/lib/posting";
 
 export interface CompanyPosting {
   id: string;
@@ -102,47 +102,10 @@ function CompanyGroupBlock({ group }: { group: CompanyGroup<CompanyPosting> }) {
       ) : (
         <div className="space-y-3">
           {group.postings.map((job) => (
-            <CompanyJobCard key={job.id} job={job} />
+            <PostingCard key={job.id} posting={postingFromCompanyPosting(job)} />
           ))}
         </div>
       )}
     </div>
-  );
-}
-
-function CompanyJobCard({ job }: { job: CompanyPosting }) {
-  const match = job.match;
-  const tone = match?.isWildcard ? "gamify" : match && match.score >= 60 ? "secondary" : "accent";
-  return (
-    <Link href={`/dashboard/jobs/${job.id}`} className="card card-link block">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-medium">
-              {job.title} <span style={{ color: "var(--color-text-muted)" }}>— {job.company}</span>
-            </p>
-            {match?.appliedAt && (
-              <span
-                className="font-data text-[10px] font-medium uppercase tracking-wide rounded-full px-2 py-0.5"
-                style={{ background: "var(--color-secondary-soft)", color: "var(--color-secondary)" }}
-              >
-                Applied
-              </span>
-            )}
-            {match?.locationMismatch && <LocationTag />}
-          </div>
-          <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-            {job.location ?? "Location n/a"} · {job.remoteType} · via {job.source.name}
-            {job.postedAt && ` · posted ${job.postedAt.toISOString().slice(0, 10)}`}
-          </p>
-          {!match && (
-            <p className="text-xs mt-2" style={{ color: "var(--color-text-muted)" }}>
-              Not scored against your profile yet — open it to read the posting, or hit &quot;Refresh matches now&quot;.
-            </p>
-          )}
-        </div>
-        {match && <SignalBar value={match.score} tone={tone} />}
-      </div>
-    </Link>
   );
 }
