@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { STRONG_MATCH_MIN, searchState } from "@/lib/searchState";
+import { STRONG_MATCH_MIN, parseStage, searchState } from "@/lib/searchState";
 import { resetDatabase, seedApplication, seedCv, seedMatch, seedPosting, seedProfile, seedSource, seedTailoredCv, seedUser } from "../support/seed";
 
 // The Search state module answers, for one user: which profile and CV are
@@ -122,5 +122,71 @@ describe("searchState", () => {
 
     expect(state.distribution).toEqual([0, 0, 0, 0, 0, 0, 1, 0, 0, 1]);
     expect(state.lastScoredAt?.toISOString()).toBe(later.toISOString());
+  });
+
+  describe("stage filter", () => {
+    async function seedFunnel() {
+      const user = await seedUser();
+      const cv = await seedCv(user.id);
+      const profile = await seedProfile(user.id, { activeCvId: cv.id });
+      const source = await seedSource();
+      const [p1, p2, p3, p4, p5, p6] = await Promise.all(Array.from({ length: 6 }, () => seedPosting(source.id)));
+      await seedMatch(profile.id, p1.id, { score: 85, viewedAt: new Date(), appliedAt: new Date() });
+      await seedMatch(profile.id, p2.id, { score: 75, viewedAt: new Date() });
+      await seedTailoredCv(cv.id, p2.id);
+      await seedMatch(profile.id, p3.id, { score: 65 });
+      await seedApplication(user.id, p3.id, "DRAFT");
+      await seedMatch(profile.id, p4.id, { score: 62, viewedAt: new Date() });
+      await seedApplication(user.id, p4.id, "SENT");
+      await seedMatch(profile.id, p5.id, { score: 40 });
+      await seedMatch(profile.id, p6.id, { score: 70, isWildcard: true });
+      return user;
+    }
+    const listed = (m: { strong: unknown[]; wildcards: unknown[]; other: unknown[] }) => m.strong.length + m.wildcards.length + m.other.length;
+
+    it("narrows the matches to one stage while the pipeline still counts the whole search", async () => {
+      const user = await seedFunnel();
+
+      const opened = await searchState(user.id, { stage: "opened" });
+      const applied = await searchState(user.id, { stage: "applied" });
+      const prepared = await searchState(user.id, { stage: "prepared" });
+
+      expect(opened.stage).toBe("opened");
+      expect(listed(opened.matches)).toBe(opened.pipeline.opened);
+      expect(listed(applied.matches)).toBe(applied.pipeline.applied);
+      expect(listed(prepared.matches)).toBe(prepared.pipeline.prepared);
+      expect(opened.pipeline).toEqual({ scored: 6, strong: 4, opened: 4, prepared: 4, applied: 2 });
+    });
+
+    it("lists only the strong matches for the strong stage, and everything for scored", async () => {
+      const user = await seedFunnel();
+
+      const strong = await searchState(user.id, { stage: "strong" });
+      const scored = await searchState(user.id, { stage: "scored" });
+
+      expect(strong.matches.strong).toHaveLength(4);
+      expect(strong.matches.wildcards).toHaveLength(0);
+      expect(strong.matches.other).toHaveLength(0);
+      expect(listed(scored.matches)).toBe(6);
+      expect(scored.stage).toBe("scored");
+    });
+
+    it("shows the unfiltered search when no stage or an unknown one is asked for", async () => {
+      const user = await seedFunnel();
+
+      const none = await searchState(user.id);
+      const unknown = await searchState(user.id, { stage: parseStage("bogus") });
+
+      expect(none.stage).toBeNull();
+      expect(unknown.stage).toBeNull();
+      expect(listed(unknown.matches)).toBe(6);
+    });
+
+    it("parses a stage from a query value", () => {
+      expect(parseStage("applied")).toBe("applied");
+      expect(parseStage("APPLIED")).toBeNull();
+      expect(parseStage(["opened"])).toBeNull();
+      expect(parseStage(undefined)).toBeNull();
+    });
   });
 });

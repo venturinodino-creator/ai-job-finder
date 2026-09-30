@@ -47,6 +47,7 @@ export default async function DashboardPage() {
       <Reveal>
         <Pipeline
           counts={pipeline}
+          linkBase="/dashboard/jobs"
           caption={caption}
           emptyHint={
             profile

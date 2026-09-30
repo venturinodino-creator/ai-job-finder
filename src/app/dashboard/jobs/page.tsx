@@ -11,17 +11,19 @@ import { groupPostingsByCompany, parseCompanyQuery } from "@/lib/companySearch";
 import { listRecentSearches, recordSearch } from "@/lib/searchHistory";
 import { RecentSearchesCard } from "@/components/RecentSearchesCard";
 import { LocationTag } from "@/components/LocationTag";
-import { STRONG_MATCH_MIN, searchState, type MatchWithJob } from "@/lib/searchState";
+import { PIPELINE_STAGE_LABELS, STRONG_MATCH_MIN, parseStage, searchState, type MatchWithJob } from "@/lib/searchState";
 import { formatRelative } from "@/lib/formatRelative";
 
-type SearchParams = Promise<{ companies?: string | string[] }>;
+type SearchParams = Promise<{ companies?: string | string[]; stage?: string | string[] }>;
 
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
   const userId = await requireDashboardUserId();
-  const state = await searchState(userId);
+  const { companies: rawCompanies, stage: rawStage } = await searchParams;
+  // An unknown stage value is simply the unfiltered view.
+  const stage = parseStage(rawStage);
+  const state = await searchState(userId, { stage });
   const { profile } = state;
 
-  const { companies: rawCompanies } = await searchParams;
   const companyQuery = Array.isArray(rawCompanies) ? rawCompanies.join(", ") : (rawCompanies ?? "");
   const companyGroups = rawCompanies === undefined ? null : await searchCompanies(rawCompanies, profile?.id ?? null);
   if (companyGroups && companyGroups.length > 0) {
@@ -52,11 +54,18 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const { strong, wildcards, other } = state.matches;
   const { pipeline, distribution, lastScoredAt: lastRun } = state;
   const hasMatches = pipeline.scored > 0;
+  const shown = strong.length + wildcards.length + other.length;
+  const stageLabel = stage ? PIPELINE_STAGE_LABELS[stage] : null;
+  // Empty-group copy when a stage filter is on: the group is empty because of
+  // the filter, not because the run found nothing.
+  const filtered = (what: string) => (stageLabel ? `No ${what} among the ${stageLabel.toLowerCase()} roles.` : null);
 
+  // The run summary always describes the whole search, whatever the stage filter.
+  const wildcardCount = pipeline.scored - distribution.reduce((a, b) => a + b, 0);
   const readings: SignalReading[] = [
     { label: "Scored roles", value: pipeline.scored },
-    { label: `Strong (${STRONG_MATCH_MIN}%+)`, value: strong.length, tone: "secondary" },
-    { label: "Wildcards", value: wildcards.length, tone: "gamify" },
+    { label: `Strong (${STRONG_MATCH_MIN}%+)`, value: pipeline.strong, tone: "secondary" },
+    { label: "Wildcards", value: wildcardCount, tone: "gamify" },
     { label: "Applied", value: pipeline.applied, tone: "accent" },
   ];
 
@@ -66,21 +75,21 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
       label: "Best matches",
       count: strong.length,
       note: `Roles scoring ${STRONG_MATCH_MIN}% or higher against your profile and CV.`,
-      content: strong.length > 0 ? <CardList matches={strong} /> : <EmptyGroup>No role reached {STRONG_MATCH_MIN}% in this run. The closest ones are under &quot;Other scored&quot;; refresh after the next ingest or broaden your target roles.</EmptyGroup>,
+      content: strong.length > 0 ? <CardList matches={strong} /> : <EmptyGroup>{filtered("strong matches") ?? <>No role reached {STRONG_MATCH_MIN}% in this run. The closest ones are under &quot;Other scored&quot;; refresh after the next ingest or broaden your target roles.</>}</EmptyGroup>,
     },
     {
       id: "wildcards",
       label: "Wildcards",
       count: wildcards.length,
       note: "Outside your exact targets, but a genuinely strong skills fit — worth a look.",
-      content: wildcards.length > 0 ? <CardList matches={wildcards} /> : <EmptyGroup>No wildcards this run.</EmptyGroup>,
+      content: wildcards.length > 0 ? <CardList matches={wildcards} /> : <EmptyGroup>{filtered("wildcards") ?? "No wildcards this run."}</EmptyGroup>,
     },
     {
       id: "other",
       label: "Other scored",
       count: other.length,
       note: `Everything else the run scored, below ${STRONG_MATCH_MIN}%.`,
-      content: other.length > 0 ? <CardList matches={other} /> : <EmptyGroup>Nothing else was scored in this run.</EmptyGroup>,
+      content: other.length > 0 ? <CardList matches={other} /> : <EmptyGroup>{filtered("other scored roles") ?? "Nothing else was scored in this run."}</EmptyGroup>,
     },
   ];
 
@@ -114,7 +123,27 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
 
       <CompanySearch query={companyQuery} groups={companyGroups} afterForm={<RecentSearchesCard searches={recentSearches} compact />} />
 
-      {hasMatches && <FeedTabs tabs={tabs} />}
+      {hasMatches && stage && stageLabel && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm"
+          role="status"
+          aria-label={`Showing ${stageLabel}: ${shown} of ${pipeline.scored} scored`}
+          style={{ background: "var(--color-accent-soft)", border: "1px solid var(--color-border)" }}
+        >
+          <p>
+            <span className="eyebrow">Showing</span>{" "}
+            <span className="font-semibold">{stageLabel}</span>{" "}
+            <span className="font-data" style={{ color: "var(--color-text-muted)" }}>
+              {shown} of {pipeline.scored} scored
+            </span>
+          </p>
+          <Link href="/dashboard/jobs" className="underline">
+            Clear filter
+          </Link>
+        </div>
+      )}
+
+      {hasMatches && <FeedTabs tabs={tabs} key={stage ?? "all"} />}
     </div>
   );
 }

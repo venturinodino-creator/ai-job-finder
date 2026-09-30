@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useReducedMotion } from "motion/react";
 import { CountUp } from "@/components/CountUp";
-import type { PipelineCounts } from "@/lib/searchState";
+import { PIPELINE_STAGE_LABELS, stageHref, type PipelineCounts, type PipelineStage } from "@/lib/pipelineStages";
 
 const SEGMENTS = 12;
 
@@ -13,21 +14,32 @@ const TONE: Record<Tone, string> = {
   secondary: "var(--color-secondary)",
 };
 
-const STEPS: { key: keyof PipelineCounts; label: string; tone: Tone; hint: string }[] = [
-  { key: "scored", label: "Scored", tone: "text", hint: "postings scored against your profile and CV" },
-  { key: "strong", label: "Strong", tone: "secondary", hint: "scoring 60% or higher" },
-  { key: "opened", label: "Opened", tone: "accent", hint: "postings you have read" },
-  { key: "prepared", label: "Tailored or drafted", tone: "accent", hint: "a tailored CV or an application draft exists" },
-  { key: "applied", label: "Applied", tone: "secondary", hint: "marked applied or sent by email" },
+const STEPS: { key: PipelineStage; tone: Tone; hint: string }[] = [
+  { key: "scored", tone: "text", hint: "postings scored against your profile and CV" },
+  { key: "strong", tone: "secondary", hint: "scoring 60% or higher" },
+  { key: "opened", tone: "accent", hint: "postings you have read" },
+  { key: "prepared", tone: "accent", hint: "a tailored CV or an application draft exists" },
+  { key: "applied", tone: "secondary", hint: "marked applied or sent by email" },
 ];
 
 /**
  * The state of the current search as a funnel: five steps from scored to
  * applied, each with its count and a segmented bar showing what share of the
  * scored postings reached it. Drawn in the same signal language as every
- * other reading in the app. Steps are not links yet.
+ * other reading in the app. With `linkBase`, each step opens that view
+ * narrowed to its stage.
  */
-export function Pipeline({ counts, caption, emptyHint }: { counts: PipelineCounts; caption?: string; emptyHint?: string }) {
+export function Pipeline({
+  counts,
+  caption,
+  emptyHint,
+  linkBase,
+}: {
+  counts: PipelineCounts;
+  caption?: string;
+  emptyHint?: string;
+  linkBase?: string;
+}) {
   const reduceMotion = useReducedMotion();
   const total = counts.scored;
 
@@ -38,19 +50,11 @@ export function Pipeline({ counts, caption, emptyHint }: { counts: PipelineCount
           const value = counts[step.key];
           const share = total === 0 ? 0 : value / total;
           const filled = value === 0 ? 0 : Math.max(1, Math.round(share * SEGMENTS));
-          return (
-            <li
-              key={step.key}
-              className="relative min-w-0"
-              aria-label={`${step.label}: ${value}${i > 0 ? ` of ${total} scored` : ""}`}
-              title={step.hint}
-            >
-              {i > 0 && (
-                <span aria-hidden className="absolute -left-3 top-7 hidden text-xs md:block" style={{ color: "var(--color-border)" }}>
-                  ›
-                </span>
-              )}
-              <p className="eyebrow truncate">{step.label}</p>
+          const label = PIPELINE_STAGE_LABELS[step.key];
+          const accessible = `${label}: ${value}${i > 0 ? ` of ${total} scored` : ""}`;
+          const body = (
+            <>
+              <p className="eyebrow truncate">{label}</p>
               <p className="font-data mt-1 text-3xl font-semibold leading-none tabular-nums" style={{ color: TONE[step.tone] }}>
                 <CountUp value={value} instant={!!reduceMotion} />
               </p>
@@ -70,6 +74,24 @@ export function Pipeline({ counts, caption, emptyHint }: { counts: PipelineCount
                 <p className="font-data mt-1 text-[11px]" style={{ color: "var(--color-text-muted)" }}>
                   {Math.round(share * 100)}% of scored
                 </p>
+              )}
+            </>
+          );
+          return (
+            <li key={step.key} className="relative min-w-0" title={step.hint}>
+              {i > 0 && (
+                <span aria-hidden className="absolute -left-3 top-7 hidden text-xs md:block" style={{ color: "var(--color-border)" }}>
+                  ›
+                </span>
+              )}
+              {linkBase ? (
+                <Link href={stageHref(linkBase, step.key)} aria-label={`${accessible}. Open in Matches`} className="pipeline-step block rounded-md">
+                  {body}
+                </Link>
+              ) : (
+                <div role="group" aria-label={accessible}>
+                  {body}
+                </div>
               )}
             </li>
           );
