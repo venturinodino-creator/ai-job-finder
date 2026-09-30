@@ -11,17 +11,14 @@ import { groupPostingsByCompany, parseCompanyQuery } from "@/lib/companySearch";
 import { listRecentSearches, recordSearch } from "@/lib/searchHistory";
 import { RecentSearchesCard } from "@/components/RecentSearchesCard";
 import { LocationTag } from "@/components/LocationTag";
-
-// Below this, a scored role isn't a "best match" — it's shown, but in its own
-// tab, so a thin run doesn't dress up 22% roles as the day's top picks.
-const STRONG_MATCH_MIN = 60;
-const BUCKETS = 10;
+import { STRONG_MATCH_MIN, searchState, type MatchWithJob } from "@/lib/searchState";
 
 type SearchParams = Promise<{ companies?: string | string[] }>;
 
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
   const userId = await requireDashboardUserId();
-  const profile = await db.searchProfile.findFirst({ where: { userId, isActive: true }, orderBy: { createdAt: "asc" } });
+  const state = await searchState(userId);
+  const { profile } = state;
 
   const { companies: rawCompanies } = await searchParams;
   const companyQuery = Array.isArray(rawCompanies) ? rawCompanies.join(", ") : (rawCompanies ?? "");
@@ -51,28 +48,15 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     );
   }
 
-  const matches = await db.matchScore.findMany({
-    where: { profileId: profile.id },
-    orderBy: [{ isWildcard: "asc" }, { score: "desc" }],
-    include: { jobPosting: { include: { source: true } } },
-  });
-
-  type Match = (typeof matches)[number];
-  const main = matches.filter((m: Match) => !m.isWildcard);
-  const strong = main.filter((m: Match) => m.score >= STRONG_MATCH_MIN);
-  const other = main.filter((m: Match) => m.score < STRONG_MATCH_MIN);
-  const wildcards = matches.filter((m: Match) => m.isWildcard);
-  const applied = matches.filter((m: Match) => m.appliedAt !== null).length;
-  const lastRun = matches.reduce<Date | null>((latest, m) => (!latest || m.createdAt > latest ? m.createdAt : latest), null);
-
-  const distribution = Array.from({ length: BUCKETS }, () => 0);
-  for (const m of main) distribution[Math.min(BUCKETS - 1, Math.floor(m.score / 10))] += 1;
+  const { strong, wildcards, other } = state.matches;
+  const { pipeline, distribution, lastScoredAt: lastRun } = state;
+  const hasMatches = pipeline.scored > 0;
 
   const readings: SignalReading[] = [
-    { label: "Scored roles", value: main.length },
+    { label: "Scored roles", value: pipeline.scored },
     { label: `Strong (${STRONG_MATCH_MIN}%+)`, value: strong.length, tone: "secondary" },
     { label: "Wildcards", value: wildcards.length, tone: "gamify" },
-    { label: "Applied", value: applied, tone: "accent" },
+    { label: "Applied", value: pipeline.applied, tone: "accent" },
   ];
 
   const tabs: FeedTab[] = [
@@ -109,7 +93,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         <RefreshMatchesButton />
       </div>
 
-      {matches.length > 0 ? (
+      {hasMatches ? (
         <Reveal>
           <SignalStrip
             readings={readings}
@@ -129,7 +113,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
 
       <CompanySearch query={companyQuery} groups={companyGroups} afterForm={<RecentSearchesCard searches={recentSearches} compact />} />
 
-      {matches.length > 0 && <FeedTabs tabs={tabs} />}
+      {hasMatches && <FeedTabs tabs={tabs} />}
     </div>
   );
 }
@@ -182,10 +166,6 @@ function formatRelative(date: Date): string {
   if (hours < 24) return `${hours} h ago`;
   return `${Math.round(hours / 24)} d ago`;
 }
-
-type MatchWithJob = Awaited<ReturnType<typeof db.matchScore.findMany>>[number] & {
-  jobPosting: { title: string; company: string; location: string | null; remoteType: string; id: string; source: { name: string } };
-};
 
 function CardList({ matches }: { matches: MatchWithJob[] }) {
   return (
