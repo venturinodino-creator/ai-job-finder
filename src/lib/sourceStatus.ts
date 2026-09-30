@@ -65,3 +65,12 @@ export function buildSourceStatus(configured: ConfiguredSource[], stored: Stored
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** The one-line reading of all sources: how many, how many postings they hold, and how many are failing. */
+export function summariseSources(sources: SourceStatus[]): { sources: number; postings: number; failing: number } {
+  return {
+    sources: sources.length,
+    postings: sources.reduce((n, s) => n + s.postings, 0),
+    failing: sources.filter((s) => s.health === "error").length,
+  };
+}

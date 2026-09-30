@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { getGamificationSummary } from "@/lib/gamification";
 import { searchState } from "@/lib/searchState";
 import { formatRelative } from "@/lib/formatRelative";
-import { GamificationPanel } from "@/components/GamificationPanel";
+import { ProgressStrip } from "@/components/ProgressStrip";
 import { AttentionFlags } from "@/components/AttentionFlags";
 import { CvHealthCard } from "@/components/CvHealthCard";
 import { Pipeline } from "@/components/Pipeline";
@@ -70,19 +70,17 @@ export default async function DashboardPage() {
         </Reveal>
       )}
 
+      <ProgressStrip summary={gamification} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 min-w-0">
           {/* Submits to /dashboard/jobs, where the per-company results render. */}
           <CompanySearch query="" groups={null} />
         </div>
-        <GamificationPanel {...gamification} />
+        <RecentSearchesCard searches={recentSearches} />
       </div>
 
-      {profile && <RecentSearchesCard searches={recentSearches} />}
-
-      <div id="sources" className="scroll-mt-24">
-        <IngestSourcesPanel sources={sources} />
-      </div>
+      <IngestSourcesPanel sources={sources} />
 
       {!profile && (
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>

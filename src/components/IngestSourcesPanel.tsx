@@ -1,4 +1,5 @@
-import type { SourceHealth, SourceStatus } from "@/lib/sourceStatus";
+import { summariseSources, type SourceHealth, type SourceStatus } from "@/lib/sourceStatus";
+import { Disclosure } from "@/components/Disclosure";
 
 const HEALTH_LABEL: Record<SourceHealth, string> = {
   ok: "OK",
@@ -15,41 +16,49 @@ const HEALTH_COLOR: Record<SourceHealth, string> = {
 };
 
 /**
- * Lists every ingest agent (one per job source) with what it has pulled in
- * and whether its last run succeeded. Aggregator boards first, then the
+ * Every ingest agent (one per job source) as one line: how many sources,
+ * how many postings they hold, and whether all are healthy. The line
+ * expands to the per-source list: aggregator boards first, then the
  * per-company career pages, so the long tail doesn't bury the big feeds.
  */
 export function IngestSourcesPanel({ sources }: { sources: SourceStatus[] }) {
   const boards = sources.filter((s) => s.kind !== "COMPANY_BOARD");
   const companies = sources.filter((s) => s.kind === "COMPANY_BOARD");
-  const total = sources.reduce((n, s) => n + s.postings, 0);
-  const errors = sources.filter((s) => s.health === "error").length;
+  const { postings, failing } = summariseSources(sources);
+  const healthy = failing === 0;
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-baseline justify-between gap-4 flex-wrap">
-        <div>
-          <p className="eyebrow">Ingest agents</p>
-          <h2 className="font-display text-xl font-semibold mt-1">Where the jobs come from</h2>
+    <Disclosure
+      id="sources"
+      className="card p-0 scroll-mt-24"
+      summary={
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm" aria-label={`Job sources: ${sources.length} sources, ${postings} postings, ${healthy ? "all healthy" : `${failing} failing`}`}>
+          <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: healthy ? "var(--color-secondary)" : "var(--color-danger)" }} />
+          <span className="font-medium">Job sources</span>
+          <span className="font-data text-xs" style={{ color: "var(--color-text-muted)" }}>
+            {sources.length} sources · {postings.toLocaleString()} postings
+          </span>
+          <span className="font-data text-xs font-medium" style={{ color: healthy ? "var(--color-secondary)" : "var(--color-danger)" }}>
+            {healthy ? "All healthy" : `${failing} failing`}
+          </span>
+          <span className="ml-auto text-xs underline [details[open]_&]:hidden" style={{ color: "var(--color-text-muted)" }}>
+            Show sources
+          </span>
+          <span className="ml-auto hidden text-xs underline [details[open]_&]:inline" style={{ color: "var(--color-text-muted)" }}>
+            Hide sources
+          </span>
         </div>
-        <p className="font-data text-xs" style={{ color: "var(--color-text-muted)" }}>
-          {sources.length} sources · {total.toLocaleString()} postings
-          {errors > 0 && (
-            <>
-              {" · "}
-              <span style={{ color: "var(--color-danger)" }}>{errors} failing</span>
-            </>
-          )}
+      }
+    >
+      <div className="space-y-4 border-t px-4 py-4" style={{ borderColor: "var(--color-border)" }}>
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          The ingest agent runs every day at 05:00 UTC, pulls each source below, and embeds new postings for
+          matching. Company boards are read straight from the employer&apos;s own careers page.
         </p>
+        <SourceGroup title="Job boards" sources={boards} />
+        <SourceGroup title={`Company career pages (${companies.length})`} sources={companies} />
       </div>
-      <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-        The ingest agent runs every day at 05:00 UTC, pulls each source below, and embeds new postings for
-        matching. Company boards are read straight from the employer&apos;s own careers page.
-      </p>
-
-      <SourceGroup title="Job boards" sources={boards} />
-      <SourceGroup title={`Company career pages (${companies.length})`} sources={companies} />
-    </section>
+    </Disclosure>
   );
 }
 

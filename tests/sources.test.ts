@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeEntities, htmlToText } from "../src/agents/sources/html";
 import { allCompanyBoards, boardsFor, parseBoardList } from "../src/agents/sources/companyBoards";
-import { buildSourceStatus } from "../src/lib/sourceStatus";
+import { buildSourceStatus, summariseSources, type SourceStatus } from "../src/lib/sourceStatus";
 
 describe("html helpers", () => {
   it("decodes named, decimal and hex entities", () => {
@@ -72,5 +72,27 @@ describe("buildSourceStatus", () => {
 
   it("sorts by display name", () => {
     expect(buildSourceStatus(configured, stored).map((s) => s.name)).toEqual(["Alpha", "Beta", "Delta", "Gamma"]);
+  });
+});
+
+describe("summariseSources", () => {
+  const status = (over: Partial<SourceStatus>): SourceStatus => ({
+    key: "k", name: "Board", baseUrl: "https://example.test", kind: "PUBLIC_API", health: "ok", postings: 0, lastFetchedAt: new Date(), lastError: null, ...over,
+  });
+
+  it("counts sources and postings and reports all healthy when nothing fails", () => {
+    expect(summariseSources([status({ postings: 120 }), status({ key: "b", postings: 5, health: "pending" }), status({ key: "c", health: "disabled" })])).toEqual({
+      sources: 3,
+      postings: 125,
+      failing: 0,
+    });
+  });
+
+  it("counts failing sources so a collapsed line can show them", () => {
+    expect(summariseSources([status({ health: "error", lastError: "HTTP 500" }), status({ key: "b", health: "error", lastError: "timeout" }), status({ key: "c" })])).toMatchObject({ failing: 2 });
+  });
+
+  it("handles no sources", () => {
+    expect(summariseSources([])).toEqual({ sources: 0, postings: 0, failing: 0 });
   });
 });
