@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { STRONG_MATCH_MIN, parseStage, searchState } from "@/lib/searchState";
-import { resetDatabase, seedApplication, seedCv, seedMatch, seedPosting, seedProfile, seedSource, seedTailoredCv, seedUser } from "../support/seed";
+import { MAX_ATTENTION_FLAGS, STRONG_MATCH_MIN, parseStage, searchState } from "@/lib/searchState";
+import { resetDatabase, seedApplication, seedCv, seedMatch, seedPosting, seedProfile, seedReview, seedSource, seedTailoredCv, seedUser } from "../support/seed";
 
 // The Search state module answers, for one user: which profile and CV are
 // active, the matches of the current search grouped as the feed shows them,
@@ -187,6 +187,152 @@ describe("searchState", () => {
       expect(parseStage("APPLIED")).toBeNull();
       expect(parseStage(["opened"])).toBeNull();
       expect(parseStage(undefined)).toBeNull();
+    });
+  });
+
+  describe("attention flags", () => {
+    const kinds = async (userId: string) => (await searchState(userId)).flags.map((f) => f.kind);
+    const yesterday = new Date(Date.now() - 86_400_000);
+    const tomorrow = new Date(Date.now() + 86_400_000);
+
+    async function seedQuietSearch() {
+      // A search with nothing to flag: one strong match, already opened,
+      // scored after every posting was ingested, healthy source, clean CV.
+      const user = await seedUser();
+      const cv = await seedCv(user.id);
+      await seedReview(cv.id, { issues: ["LOW"] });
+      const profile = await seedProfile(user.id, { activeCvId: cv.id });
+      const source = await seedSource();
+      const posting = await seedPosting(source.id);
+      await seedMatch(profile.id, posting.id, { score: 80, viewedAt: new Date() });
+      return { user, cv, profile, source, posting };
+    }
+
+    it("reports nothing to attend to for a quiet search", async () => {
+      const { user } = await seedQuietSearch();
+      expect(await kinds(user.id)).toEqual([]);
+    });
+
+    it("flags strong matches the user has not opened, with a link to the strong stage", async () => {
+      const { user, profile, source } = await seedQuietSearch();
+      const [a, b] = await Promise.all([seedPosting(source.id), seedPosting(source.id)]);
+      await seedMatch(profile.id, a.id, { score: 90 });
+      await seedMatch(profile.id, b.id, { score: STRONG_MATCH_MIN });
+
+      const { flags } = await searchState(user.id);
+
+      expect(flags).toHaveLength(1);
+      expect(flags[0]).toMatchObject({ kind: "strong-unopened", count: 2, action: { href: "/dashboard/jobs?stage=strong" } });
+    });
+
+    it("flags application drafts not yet sent", async () => {
+      const { user, profile, source } = await seedQuietSearch();
+      const posting = await seedPosting(source.id);
+      await seedMatch(profile.id, posting.id, { score: 50, viewedAt: new Date() });
+      await seedApplication(user.id, posting.id, "DRAFT");
+
+      const { flags } = await searchState(user.id);
+
+      expect(flags.map((f) => f.kind)).toEqual(["drafts-unsent"]);
+      expect(flags[0]).toMatchObject({ count: 1, action: { href: "/dashboard/jobs?stage=prepared" } });
+    });
+
+    it("does not flag a draft once it was sent", async () => {
+      const { user, profile, source } = await seedQuietSearch();
+      const posting = await seedPosting(source.id);
+      await seedMatch(profile.id, posting.id, { score: 50, viewedAt: new Date() });
+      await seedApplication(user.id, posting.id, "SENT");
+
+      expect(await kinds(user.id)).toEqual([]);
+    });
+
+    it("flags high-severity issues on the active CV's latest review only", async () => {
+      const { user, cv } = await seedQuietSearch();
+      await seedReview(cv.id, { issues: ["HIGH", "HIGH", "MEDIUM"], createdAt: new Date() });
+
+      const { flags } = await searchState(user.id);
+
+      expect(flags).toHaveLength(1);
+      expect(flags[0]).toMatchObject({ kind: "cv-high-issues", count: 2, action: { href: "/dashboard/cv" } });
+    });
+
+    it("ignores high-severity issues on an older review or on a CV that is not active", async () => {
+      const { user, cv } = await seedQuietSearch();
+      await seedReview(cv.id, { issues: ["HIGH"], createdAt: new Date(Date.now() - 2 * 86_400_000) });
+      const otherCv = await seedCv(user.id);
+      await seedReview(otherCv.id, { issues: ["HIGH"], createdAt: new Date() });
+
+      expect(await kinds(user.id)).toEqual([]);
+    });
+
+    it("flags postings ingested since the last scoring run", async () => {
+      const { user, source } = await seedQuietSearch();
+      await seedPosting(source.id, { fetchedAt: tomorrow });
+      await seedPosting(source.id, { fetchedAt: tomorrow });
+
+      const { flags } = await searchState(user.id);
+
+      expect(flags).toHaveLength(1);
+      expect(flags[0]).toMatchObject({ kind: "new-postings", count: 2, action: { href: "/dashboard/jobs" } });
+    });
+
+    it("flags a search whose would-be strong matches are all outside the user's locations", async () => {
+      const user = await seedUser();
+      const profile = await seedProfile(user.id, { locations: ["Cape Town"], remotePref: "ON_SITE" });
+      const source = await seedSource();
+      const [a, b] = await Promise.all([seedPosting(source.id), seedPosting(source.id)]);
+      // 80 before the penalty, 55 after: would have been strong.
+      await seedMatch(profile.id, a.id, { score: 55, locationMismatch: true, viewedAt: new Date() });
+      // Never strong, penalty or not.
+      await seedMatch(profile.id, b.id, { score: 20, locationMismatch: true, viewedAt: new Date() });
+
+      const { flags } = await searchState(user.id);
+
+      expect(flags).toHaveLength(1);
+      expect(flags[0]).toMatchObject({ kind: "location-blocked", count: 1, action: { href: "/dashboard/profile" } });
+    });
+
+    it("does not raise the location flag while any strong match exists", async () => {
+      const { user, profile, source } = await seedQuietSearch();
+      const posting = await seedPosting(source.id);
+      await seedMatch(profile.id, posting.id, { score: 55, locationMismatch: true, viewedAt: new Date() });
+
+      expect(await kinds(user.id)).toEqual([]);
+    });
+
+    it("flags job sources reporting an error, but not disabled ones", async () => {
+      const { user } = await seedQuietSearch();
+      await seedSource({ lastError: "HTTP 500" });
+      await seedSource({ lastError: "HTTP 500", enabled: false });
+
+      const { flags } = await searchState(user.id);
+
+      expect(flags).toHaveLength(1);
+      expect(flags[0]).toMatchObject({ kind: "source-errors", count: 1, action: { href: "/dashboard#sources" } });
+    });
+
+    it("shows at most three flags, most important first", async () => {
+      const { user, cv, profile, source } = await seedQuietSearch();
+      await seedSource({ lastError: "HTTP 500" }); // 6th
+      await seedPosting(source.id, { fetchedAt: tomorrow }); // 4th
+      await seedReview(cv.id, { issues: ["HIGH"], createdAt: new Date() }); // 3rd
+      const drafted = await seedPosting(source.id, { fetchedAt: yesterday });
+      await seedMatch(profile.id, drafted.id, { score: 50, viewedAt: new Date(), createdAt: yesterday });
+      await seedApplication(user.id, drafted.id, "DRAFT"); // 2nd
+      const unopened = await seedPosting(source.id, { fetchedAt: yesterday });
+      await seedMatch(profile.id, unopened.id, { score: 95, createdAt: yesterday }); // 1st
+
+      const { flags } = await searchState(user.id);
+
+      expect(flags).toHaveLength(MAX_ATTENTION_FLAGS);
+      expect(flags.map((f) => f.kind)).toEqual(["strong-unopened", "drafts-unsent", "cv-high-issues"]);
+    });
+
+    it("has no flags for a user without a profile", async () => {
+      const user = await seedUser();
+      await seedSource({ lastError: "HTTP 500" });
+
+      expect(await kinds(user.id)).toEqual([]);
     });
   });
 });

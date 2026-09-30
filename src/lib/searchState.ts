@@ -1,4 +1,6 @@
 import { db } from "@/lib/db";
+import { OUTSIDE_LOCATION_PENALTY } from "@/lib/locationFit";
+import { stageHref } from "@/lib/pipelineStages";
 import type { Cv, JobPosting, JobSource, MatchScore, SearchProfile } from "@/generated/prisma/client";
 
 /** A scored role is a "strong match" from this score up; below it, it's shown but not led with. */
@@ -12,9 +14,25 @@ export type { PipelineCounts, PipelineStage } from "@/lib/pipelineStages";
 export { PIPELINE_STAGES, PIPELINE_STAGE_LABELS, parseStage } from "@/lib/pipelineStages";
 import type { PipelineCounts, PipelineStage } from "@/lib/pipelineStages";
 
+/** The six things the Overview can ask the user to attend to, most important first. */
+export type AttentionFlagKind = "strong-unopened" | "drafts-unsent" | "cv-high-issues" | "new-postings" | "location-blocked" | "source-errors";
+export const MAX_ATTENTION_FLAGS = 3;
+
+export interface AttentionFlag {
+  kind: AttentionFlagKind;
+  /** One sentence saying what changed or is stuck. */
+  statement: string;
+  /** How many things the statement is about, when it is about a number of them. */
+  count: number | null;
+  /** The one thing to do about it and where that happens. */
+  action: { label: string; href: string };
+}
+
 export interface SearchState {
   profile: SearchProfile | null;
   activeCv: Cv | null;
+  /** At most MAX_ATTENTION_FLAGS things that changed or are stuck, most important first; empty when nothing needs attention. */
+  flags: AttentionFlag[];
   /** The stage the matches are narrowed to, or null for the whole search. */
   stage: PipelineStage | null;
   /** The current search's matches grouped as the feed shows them, narrowed to `stage` when one is set. */
@@ -48,7 +66,7 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
     include: { activeCv: true },
   });
   if (!profile) {
-    return { profile: null, activeCv: null, stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
+    return { profile: null, activeCv: null, flags: [], stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
   }
   const { activeCv, ...profileRow } = profile;
 
@@ -58,9 +76,15 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
     include: { jobPosting: { include: { source: true } } },
   });
   const postingIds = rows.map((m) => m.jobPostingId);
-  const [applications, tailored] = await Promise.all([
+  const lastScoredAt = rows.reduce<Date | null>((latest, m) => (!latest || m.createdAt > latest ? m.createdAt : latest), null);
+  const [applications, tailored, latestReview, newPostings, failingSources] = await Promise.all([
     db.application.findMany({ where: { userId, jobPostingId: { in: postingIds } }, select: { jobPostingId: true, status: true } }),
     db.tailoredCv.findMany({ where: { jobPostingId: { in: postingIds }, cv: { userId } }, select: { jobPostingId: true } }),
+    activeCv
+      ? db.cvReview.findFirst({ where: { cvId: activeCv.id }, orderBy: { createdAt: "desc" }, select: { _count: { select: { issues: { where: { severity: "HIGH" } } } } } })
+      : null,
+    lastScoredAt ? db.jobPosting.count({ where: { fetchedAt: { gt: lastScoredAt } } }) : 0,
+    db.jobSource.count({ where: { enabled: true, lastError: { not: null } } }),
   ]);
 
   // The pipeline is a funnel: acting on a posting implies the stages before
@@ -102,9 +126,31 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
 
   const distribution = emptyDistribution();
   for (const m of main) distribution[Math.min(DISTRIBUTION_BUCKETS - 1, Math.floor(m.score / 10))] += 1;
-  const lastScoredAt = rows.reduce<Date | null>((latest, m) => (!latest || m.createdAt > latest ? m.createdAt : latest), null);
 
-  return { profile: profileRow, activeCv, stage, matches, pipeline, distribution, lastScoredAt };
+  // Attention flags, in order of importance. Each is the count of things
+  // behind it; a count of zero means the condition doesn't hold.
+  const strongUnopened = main.filter((m) => isStrong(m) && !isOpened(m)).length;
+  const draftsUnsent = applications.filter((a) => a.status === "DRAFT").length;
+  const highIssues = latestReview?._count.issues ?? 0;
+  const wouldBeStrong = pipeline.strong === 0 ? main.filter((m) => m.locationMismatch && m.score + OUTSIDE_LOCATION_PENALTY >= STRONG_MATCH_MIN).length : 0;
+  const flags = attentionFlags([
+    { kind: "strong-unopened", count: strongUnopened, statement: `${plural(strongUnopened, "strong match", "strong matches")} you haven't opened`, action: { label: "Open them", href: stageHref("/dashboard/jobs", "strong") } },
+    { kind: "drafts-unsent", count: draftsUnsent, statement: `${plural(draftsUnsent, "application draft", "application drafts")} not sent`, action: { label: "Finish drafts", href: stageHref("/dashboard/jobs", "prepared") } },
+    { kind: "cv-high-issues", count: highIssues, statement: `${plural(highIssues, "high-severity issue", "high-severity issues")} open on your CV`, action: { label: "Review CV", href: "/dashboard/cv" } },
+    { kind: "new-postings", count: newPostings, statement: `${plural(newPostings, "posting", "postings")} ingested since your last scoring run`, action: { label: "Refresh matches", href: "/dashboard/jobs" } },
+    { kind: "location-blocked", count: wouldBeStrong, statement: `${plural(wouldBeStrong, "role", "roles")} would be strong matches but sit outside your locations`, action: { label: "Widen locations", href: "/dashboard/profile" } },
+    { kind: "source-errors", count: failingSources, statement: `${plural(failingSources, "job source", "job sources")} reporting an error`, action: { label: "Check sources", href: "/dashboard#sources" } },
+  ]);
+
+  return { profile: profileRow, activeCv, flags, stage, matches, pipeline, distribution, lastScoredAt };
+}
+
+function attentionFlags(candidates: AttentionFlag[]): AttentionFlag[] {
+  return candidates.filter((f) => (f.count ?? 0) > 0).slice(0, MAX_ATTENTION_FLAGS);
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
 }
 
 function emptyDistribution(): number[] {

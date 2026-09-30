@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { ApplicationStatus, RemotePreference } from "@/generated/prisma/client";
+import type { ApplicationStatus, IssueSeverity, RemotePreference } from "@/generated/prisma/client";
 
 // Factories for database-backed tests. Every value is a plausible default so
 // a test only states what it cares about. Rows live in the disposable test
@@ -40,14 +40,16 @@ export async function seedProfile(
   });
 }
 
-export async function seedSource() {
+export async function seedSource(overrides: { lastError?: string | null; enabled?: boolean } = {}) {
   const key = `source-${next()}`;
-  return db.jobSource.create({ data: { key, name: "Test board", kind: "PUBLIC_API", baseUrl: "https://example.test" } });
+  return db.jobSource.create({
+    data: { key, name: "Test board", kind: "PUBLIC_API", baseUrl: "https://example.test", lastFetchedAt: new Date(), enabled: overrides.enabled ?? true, lastError: overrides.lastError ?? null },
+  });
 }
 
 export async function seedPosting(
   sourceId: string,
-  overrides: { title?: string; company?: string; location?: string | null; remoteType?: RemotePreference; postedAt?: Date } = {},
+  overrides: { title?: string; company?: string; location?: string | null; remoteType?: RemotePreference; postedAt?: Date; fetchedAt?: Date } = {},
 ) {
   const id = next();
   return db.jobPosting.create({
@@ -61,6 +63,8 @@ export async function seedPosting(
       location: overrides.location === undefined ? "Amsterdam" : overrides.location,
       remoteType: overrides.remoteType ?? "ANY",
       postedAt: overrides.postedAt ?? new Date(),
+      // Postings are ingested a day before any scoring run in these tests unless a test says otherwise.
+      fetchedAt: overrides.fetchedAt ?? new Date(Date.now() - 86_400_000),
     },
   });
 }
@@ -91,4 +95,22 @@ export async function seedApplication(userId: string, jobPostingId: string, stat
 
 export async function seedTailoredCv(cvId: string, jobPostingId: string) {
   return db.tailoredCv.create({ data: { cvId, jobPostingId, suggestions: [] } });
+}
+
+/** A review of a CV with the given issues; `issues` lists one severity per issue. */
+export async function seedReview(cvId: string, overrides: { overallScore?: number; issues?: IssueSeverity[]; createdAt?: Date } = {}) {
+  return db.cvReview.create({
+    data: {
+      cvId,
+      overallScore: overrides.overallScore ?? 70,
+      verdict: "GOOD",
+      summary: "A reasonable CV.",
+      strengths: ["Clear"],
+      atsCompatible: true,
+      ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
+      issues: {
+        create: (overrides.issues ?? []).map((severity) => ({ category: "FORMATTING", severity, description: "An issue.", suggestion: "Fix it." })),
+      },
+    },
+  });
 }

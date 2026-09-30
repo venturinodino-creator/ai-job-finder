@@ -5,6 +5,7 @@ import { getGamificationSummary } from "@/lib/gamification";
 import { searchState } from "@/lib/searchState";
 import { formatRelative } from "@/lib/formatRelative";
 import { GamificationPanel } from "@/components/GamificationPanel";
+import { AttentionFlags } from "@/components/AttentionFlags";
 import { Pipeline } from "@/components/Pipeline";
 import { Reveal } from "@/components/Reveal";
 import { CompanySearch } from "@/components/CompanySearch";
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
     }),
     listRecentSearches(userId, 6),
   ]);
-  const { profile, pipeline, lastScoredAt } = state;
+  const { profile, pipeline, lastScoredAt, flags } = state;
   const sources = buildSourceStatus(
     jobSourceAdapters,
     sourceRows.map((r) => ({ key: r.key, enabled: r.enabled, lastFetchedAt: r.lastFetchedAt, lastError: r.lastError, postings: r._count.postings })),
@@ -57,19 +58,27 @@ export default async function DashboardPage() {
         />
       </Reveal>
 
+      {profile && (
+        <Reveal index={1}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 min-w-0">
+              <AttentionFlags flags={flags} />
+            </div>
+            <GamificationPanel {...gamification} />
+          </div>
+        </Reveal>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 min-w-0">
           {/* Submits to /dashboard/jobs, where the per-company results render. */}
           <CompanySearch query="" groups={null} />
         </div>
-        <GamificationPanel {...gamification} />
+        {profile ? <RecentSearchesCard searches={recentSearches} /> : <GamificationPanel {...gamification} />}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 min-w-0">
-          <IngestSourcesPanel sources={sources} />
-        </div>
-        <RecentSearchesCard searches={recentSearches} />
+      <div id="sources" className="scroll-mt-24">
+        <IngestSourcesPanel sources={sources} />
       </div>
 
       {!profile && (
