@@ -96,7 +96,7 @@ export function SignalStrip({
 function distributionLabel(distribution: number[], strongFrom: number): string {
   const strong = distribution.slice(strongFrom).reduce((a, b) => a + b, 0);
   const total = distribution.reduce((a, b) => a + b, 0);
-  return `Score distribution: ${strong} of ${total} scored roles at ${strongFrom * 10}% or above`;
+  return `Score distribution of the ${total} non-wildcard roles: ${strong} at ${strongFrom * 10}% or above`;
 }
 
 /** Counts from 0 to `value` on mount; renders the value directly when motion is reduced. */
