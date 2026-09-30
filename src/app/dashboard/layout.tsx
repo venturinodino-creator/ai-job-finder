@@ -2,16 +2,16 @@ import Link from "next/link";
 import { requireDashboardUserId } from "@/lib/auth";
 import { touchDailyStreak, levelForPoints } from "@/lib/gamification";
 import { db } from "@/lib/db";
-import { LogoutButton } from "@/components/LogoutButton";
 import { NavPills } from "@/components/NavPills";
+import { StreakMenu } from "@/components/StreakMenu";
 
+/** Five sections. Jobs stays active across its views and a posting's page; Achievements lives in the streak menu. */
 const NAV_LINKS = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/profile", label: "Search profile" },
-  { href: "/dashboard/cv", label: "CV" },
+  { href: "/dashboard", label: "Overview", exact: true },
   { href: "/dashboard/jobs", label: "Jobs" },
+  { href: "/dashboard/cv", label: "CV" },
+  { href: "/dashboard/profile", label: "Profile" },
   { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/achievements", label: "Achievements" },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -34,21 +34,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </Link>
           {/* Below md the nav drops to its own full-width row and scrolls sideways. */}
           <NavPills items={NAV_LINKS} className="max-md:order-last max-md:w-full" />
-          <div className="flex items-center gap-4 shrink-0">
-            {progress && (
-              <Link
-                href="/dashboard/achievements"
-                className="font-data flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-                style={{ background: "var(--color-gamify-soft)", color: "var(--color-gamify)" }}
-                title={`Level ${levelForPoints(progress.points)} · ${progress.points} pts`}
-              >
-                <span aria-hidden>🔥</span>
-                {progress.currentStreak}
-                <span className="opacity-60">· Lv{levelForPoints(progress.points)}</span>
-              </Link>
-            )}
-            <LogoutButton />
-          </div>
+          <StreakMenu streak={progress?.currentStreak ?? 0} level={levelForPoints(progress?.points ?? 0)} points={progress?.points ?? 0} />
         </div>
       </header>
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8">{children}</main>
