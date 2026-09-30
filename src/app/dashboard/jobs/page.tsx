@@ -12,6 +12,7 @@ import { listRecentSearches, recordSearch } from "@/lib/searchHistory";
 import { RecentSearchesCard } from "@/components/RecentSearchesCard";
 import { LocationTag } from "@/components/LocationTag";
 import { STRONG_MATCH_MIN, searchState, type MatchWithJob } from "@/lib/searchState";
+import { formatRelative } from "@/lib/formatRelative";
 
 type SearchParams = Promise<{ companies?: string | string[] }>;
 
@@ -156,15 +157,6 @@ async function searchCompanies(raw: string | string[], profileId: string | null)
   }));
 
   return groupPostingsByCompany(names, flat);
-}
-
-function formatRelative(date: Date): string {
-  const minutes = Math.round((Date.now() - date.getTime()) / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} d ago`;
 }
 
 function CardList({ matches }: { matches: MatchWithJob[] }) {
