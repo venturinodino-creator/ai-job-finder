@@ -74,13 +74,13 @@ export function CompanySearch({ query, groups, afterForm }: Props) {
       )}
 
       {groups?.map((group) => (
-        <CompanyGroupBlock key={group.name} group={group} />
+        <CompanyGroupBlock key={group.name} group={group} query={query} />
       ))}
     </section>
   );
 }
 
-function CompanyGroupBlock({ group }: { group: CompanyGroup<CompanyPosting> }) {
+function CompanyGroupBlock({ group, query }: { group: CompanyGroup<CompanyPosting>; query: string }) {
   const count = group.postings.length;
   return (
     <div className="space-y-3">
@@ -102,7 +102,7 @@ function CompanyGroupBlock({ group }: { group: CompanyGroup<CompanyPosting> }) {
       ) : (
         <div className="space-y-3">
           {group.postings.map((job) => (
-            <PostingCard key={job.id} posting={postingFromCompanyPosting(job)} />
+            <PostingCard key={job.id} posting={postingFromCompanyPosting(job)} origin={{ view: "companies", companies: query }} />
           ))}
         </div>
       )}

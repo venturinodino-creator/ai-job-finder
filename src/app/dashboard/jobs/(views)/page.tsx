@@ -7,6 +7,7 @@ import { FeedTabs, type FeedTab } from "@/components/FeedTabs";
 import { Reveal } from "@/components/Reveal";
 import { PostingCard } from "@/components/PostingCard";
 import { postingFromMatch } from "@/lib/posting";
+import type { PostingOrigin } from "@/lib/postingOrigin";
 import { PIPELINE_STAGE_LABELS, STRONG_MATCH_MIN, parseStage, searchState, type MatchWithJob } from "@/lib/searchState";
 import { formatRelative } from "@/lib/formatRelative";
 
@@ -47,6 +48,8 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const { strong, wildcards, other } = state.matches;
   const { pipeline, distribution, lastScoredAt: lastRun } = state;
   const hasMatches = pipeline.scored > 0;
+  // Cards carry this view and its filter so a posting can lead back here.
+  const origin: PostingOrigin = { view: "matches", stage };
   const shown = strong.length + wildcards.length + other.length;
   const stageLabel = stage ? PIPELINE_STAGE_LABELS[stage] : null;
   // Empty-group copy when a stage filter is on: the group is empty because of
@@ -68,21 +71,21 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
       label: "Best matches",
       count: strong.length,
       note: `Roles scoring ${STRONG_MATCH_MIN}% or higher against your profile and CV.`,
-      content: strong.length > 0 ? <CardList matches={strong} /> : <EmptyGroup>{filtered("strong matches") ?? <>No role reached {STRONG_MATCH_MIN}% in this run. The closest ones are under &quot;Other scored&quot;; refresh after the next ingest or broaden your target roles.</>}</EmptyGroup>,
+      content: strong.length > 0 ? <CardList matches={strong} origin={origin} /> : <EmptyGroup>{filtered("strong matches") ?? <>No role reached {STRONG_MATCH_MIN}% in this run. The closest ones are under &quot;Other scored&quot;; refresh after the next ingest or broaden your target roles.</>}</EmptyGroup>,
     },
     {
       id: "wildcards",
       label: "Wildcards",
       count: wildcards.length,
       note: "Outside your exact targets, but a genuinely strong skills fit — worth a look.",
-      content: wildcards.length > 0 ? <CardList matches={wildcards} /> : <EmptyGroup>{filtered("wildcards") ?? "No wildcards this run."}</EmptyGroup>,
+      content: wildcards.length > 0 ? <CardList matches={wildcards} origin={origin} /> : <EmptyGroup>{filtered("wildcards") ?? "No wildcards this run."}</EmptyGroup>,
     },
     {
       id: "other",
       label: "Other scored",
       count: other.length,
       note: `Everything else the run scored, below ${STRONG_MATCH_MIN}%.`,
-      content: other.length > 0 ? <CardList matches={other} /> : <EmptyGroup>{filtered("other scored roles") ?? "Nothing else was scored in this run."}</EmptyGroup>,
+      content: other.length > 0 ? <CardList matches={other} origin={origin} /> : <EmptyGroup>{filtered("other scored roles") ?? "Nothing else was scored in this run."}</EmptyGroup>,
     },
   ];
 
@@ -136,12 +139,12 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   );
 }
 
-function CardList({ matches }: { matches: MatchWithJob[] }) {
+function CardList({ matches, origin }: { matches: MatchWithJob[]; origin: PostingOrigin }) {
   return (
     <div className="space-y-3">
       {matches.map((m, i) => (
         <Reveal key={m.id} index={i}>
-          <PostingCard posting={postingFromMatch(m)} />
+          <PostingCard posting={postingFromMatch(m)} origin={origin} />
         </Reveal>
       ))}
     </div>

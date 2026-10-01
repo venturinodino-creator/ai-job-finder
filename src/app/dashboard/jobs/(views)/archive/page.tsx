@@ -72,7 +72,7 @@ export default async function ArchivePage() {
                   ) : (
                     <div className="space-y-3">
                       {results.map((r) => (
-                        <PostingCard key={r.jobPostingId} posting={postingFromArchivedResult(r)} />
+                        <PostingCard key={r.jobPostingId} posting={postingFromArchivedResult(r)} origin={{ view: "archive" }} />
                       ))}
                     </div>
                   )}

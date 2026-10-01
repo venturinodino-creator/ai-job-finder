@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireDashboardUserId } from "@/lib/auth";
 import { markJobViewed } from "@/lib/jobs";
 import { postingState } from "@/lib/searchState";
+import { backLink, parseOrigin } from "@/lib/postingOrigin";
 import { PostingReadingPanel } from "@/components/PostingReadingPanel";
 import { TailorCvButton } from "@/components/TailorCvButton";
 import { JobDescription } from "@/components/JobDescription";
@@ -13,8 +15,12 @@ import type { JobSummary } from "@/agents/jobSummary";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
+type SearchParams = Promise<{ from?: string | string[]; stage?: string | string[]; companies?: string | string[] }>;
+
+export default async function JobDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
+  // Where the posting was opened from; a missing or unknown origin leads back to Matches.
+  const back = backLink(parseOrigin(await searchParams));
   const userId = await requireDashboardUserId();
 
   // Viewing counts before the reading is taken, so the posting reads as opened.
@@ -43,6 +49,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="space-y-2">
+        <Link href={back.href} className="inline-block text-sm underline" style={{ color: "var(--color-text-muted)" }}>
+          ← {back.label}
+        </Link>
         <h1 className="font-display text-2xl font-semibold">{job.title}</h1>
         <p style={{ color: "var(--color-text-muted)" }}>
           {job.company} · {job.location ?? "Location n/a"} · {job.remoteType} · via {job.source.name}

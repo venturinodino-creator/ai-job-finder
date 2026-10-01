@@ -2,14 +2,16 @@ import Link from "next/link";
 import { SignalBar } from "@/components/SignalBar";
 import { formatRelative } from "@/lib/formatRelative";
 import { readingTone, type PostingReading, type PostingSummary } from "@/lib/posting";
+import { postingHref, type PostingOrigin } from "@/lib/postingOrigin";
 
 /**
  * The one card for a posting wherever postings are listed (Matches,
  * Companies, Archive): title and company, the Applied / Wildcard / Outside
  * your locations tags, where and when it was posted, the reading in the
  * signal bar, and the not-yet-scored state when the search hasn't met it.
+ * Its link carries the view it sits in, so the posting page can lead back.
  */
-export function PostingCard({ posting }: { posting: PostingSummary }) {
+export function PostingCard({ posting, origin }: { posting: PostingSummary; origin?: PostingOrigin }) {
   const { reading } = posting;
   const meta = [
     posting.location ?? "Location n/a",
@@ -19,7 +21,7 @@ export function PostingCard({ posting }: { posting: PostingSummary }) {
   ].filter(Boolean);
 
   return (
-    <Link href={`/dashboard/jobs/${posting.id}`} className="card card-link block">
+    <Link href={postingHref(posting.id, origin)} className="card card-link block">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
