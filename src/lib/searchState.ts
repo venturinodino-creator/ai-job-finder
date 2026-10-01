@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import { OUTSIDE_LOCATION_PENALTY } from "@/lib/locationFit";
 import { stageHref } from "@/lib/pipelineStages";
-import type { Cv, CvVerdict, JobPosting, JobSource, MatchScore, SearchProfile } from "@/generated/prisma/client";
+import type { Application, ApplicationMethod, Cv, CvVerdict, JobPosting, JobSource, MatchScore, SearchProfile, TailoredCv } from "@/generated/prisma/client";
+import type { PostingReading } from "@/lib/posting";
 
 import { STRONG_MATCH_MIN } from "@/lib/pipelineStages";
 export { STRONG_MATCH_MIN };
@@ -211,4 +212,78 @@ function plural(n: number, one: string, many: string): string {
 
 function emptyDistribution(): number[] {
   return Array.from({ length: DISTRIBUTION_BUCKETS }, () => 0);
+}
+
+/** One posting as the current search sees it, and how far the user has taken it. */
+export interface PostingState {
+  posting: JobPosting & { source: JobSource };
+  profile: SearchProfile | null;
+  /** The CV attached to the active profile: the one tailoring and applying use. */
+  activeCv: Cv | null;
+  /** The active profile's score for this posting; null when the search has not scored it. */
+  reading: (PostingReading & { matchedSkills: string[]; missingSkills: string[]; scoredAt: Date }) | null;
+  /**
+   * The posting's place in the pipeline, under the pipeline's own rules: a
+   * later step implies the earlier ones. `applied` carries how and when;
+   * the method is null when it was only marked on the match row.
+   */
+  steps: { opened: boolean; prepared: boolean; applied: { method: ApplicationMethod | null; at: Date } | null };
+  application: Application | null;
+  /** The tailored version of the active CV for this posting, if one exists. */
+  tailored: TailoredCv | null;
+}
+
+/**
+ * The per-posting reading: null when the posting does not exist. Only the
+ * user's own rows are read, and the score is the active profile's.
+ */
+export async function postingState(userId: string, jobPostingId: string): Promise<PostingState | null> {
+  const posting = await db.jobPosting.findUnique({ where: { id: jobPostingId }, include: { source: true } });
+  if (!posting) return null;
+
+  const [profile, application, tailoredCvs] = await Promise.all([
+    db.searchProfile.findFirst({ where: { userId, isActive: true }, orderBy: { createdAt: "asc" }, include: { activeCv: true } }),
+    db.application.findUnique({ where: { userId_jobPostingId: { userId, jobPostingId } } }),
+    db.tailoredCv.findMany({ where: { jobPostingId, cv: { userId } } }),
+  ]);
+  const match = profile ? await db.matchScore.findFirst({ where: { profileId: profile.id, jobPostingId } }) : null;
+  const activeCv = profile?.activeCv ?? null;
+
+  const sent = application !== null && (application.status === "SENT" || application.status === "APPLIED");
+  const applied = sent
+    ? { method: application.method, at: application.sentAt ?? application.updatedAt }
+    : match?.appliedAt
+      ? { method: null, at: match.appliedAt }
+      : null;
+  const prepared = applied !== null || tailoredCvs.length > 0 || application !== null;
+  const opened = prepared || (match?.viewedAt ?? null) !== null;
+
+  let profileRow: SearchProfile | null = null;
+  if (profile) {
+    const { activeCv: _cv, ...rest } = profile;
+    void _cv;
+    profileRow = rest;
+  }
+
+  return {
+    posting,
+    profile: profileRow,
+    activeCv,
+    reading: match
+      ? {
+          score: match.score,
+          isWildcard: match.isWildcard,
+          explanation: match.explanation,
+          wildcardReason: match.wildcardReason,
+          applied: applied !== null,
+          locationMismatch: match.locationMismatch,
+          matchedSkills: match.matchedSkills,
+          missingSkills: match.missingSkills,
+          scoredAt: match.createdAt,
+        }
+      : null,
+    steps: { opened, prepared, applied },
+    application,
+    tailored: activeCv ? (tailoredCvs.find((t) => t.cvId === activeCv.id) ?? null) : null,
+  };
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SignalBar } from "@/components/SignalBar";
 import { formatRelative } from "@/lib/formatRelative";
-import { readingTone, type PostingSummary } from "@/lib/posting";
+import { readingTone, type PostingReading, type PostingSummary } from "@/lib/posting";
 
 /**
  * The one card for a posting wherever postings are listed (Matches,
@@ -26,13 +26,7 @@ export function PostingCard({ posting }: { posting: PostingSummary }) {
             <p className="font-medium">
               {posting.title} <span style={{ color: "var(--color-text-muted)" }}>— {posting.company}</span>
             </p>
-            {reading?.applied && <Tag tone="secondary">Applied</Tag>}
-            {reading?.isWildcard && <Tag tone="gamify">Wildcard</Tag>}
-            {reading?.locationMismatch && (
-              <Tag tone="gamify" title="This posting is outside the locations on your search profile, so its score includes a location penalty.">
-                Outside your locations
-              </Tag>
-            )}
+            {reading && <PostingTags reading={reading} />}
           </div>
           <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
             {meta.join(" · ")}
@@ -62,6 +56,21 @@ export function PostingCard({ posting }: { posting: PostingSummary }) {
         )}
       </div>
     </Link>
+  );
+}
+
+/** The tags a reading earns, the same wherever a posting is shown. */
+export function PostingTags({ reading }: { reading: Pick<PostingReading, "applied" | "isWildcard" | "locationMismatch"> }) {
+  return (
+    <>
+      {reading.applied && <Tag tone="secondary">Applied</Tag>}
+      {reading.isWildcard && <Tag tone="gamify">Wildcard</Tag>}
+      {reading.locationMismatch && (
+        <Tag tone="gamify" title="This posting is outside the locations on your search profile, so its score includes a location penalty.">
+          Outside your locations
+        </Tag>
+      )}
+    </>
   );
 }
 

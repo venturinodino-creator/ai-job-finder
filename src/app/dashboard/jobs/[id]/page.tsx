@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireDashboardUserId } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { markJobViewed } from "@/lib/jobs";
+import { postingState } from "@/lib/searchState";
+import { PostingReadingPanel } from "@/components/PostingReadingPanel";
 import { TailorCvButton } from "@/components/TailorCvButton";
 import { MarkAppliedButton } from "@/components/MarkAppliedButton";
 import { JobDescription } from "@/components/JobDescription";
@@ -17,23 +18,15 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const userId = await requireDashboardUserId();
 
-  const job = await db.jobPosting.findUnique({ where: { id }, include: { source: true } });
-  if (!job) notFound();
-
+  // Viewing counts before the reading is taken, so the posting reads as opened.
   await markJobViewed(userId, id);
+  const state = await postingState(userId, id);
+  if (!state) notFound();
 
-  const [activeProfile, matches, application] = await Promise.all([
-    db.searchProfile.findFirst({ where: { userId, isActive: true }, include: { activeCv: true } }),
-    db.matchScore.findMany({ where: { jobPostingId: id, profile: { userId } } }),
-    db.application.findUnique({ where: { userId_jobPostingId: { userId, jobPostingId: id } } }),
-  ]);
-  const activeCv = activeProfile?.activeCv ?? null;
-  // Tailoring belongs to a specific CV: after switching the active CV (e.g.
-  // PDF -> .docx) the old CV's suggestions must not be shown as applicable.
-  const tailored = activeCv
-    ? await db.tailoredCv.findUnique({ where: { cvId_jobPostingId: { cvId: activeCv.id, jobPostingId: id } } })
-    : null;
-  const applied = matches.some((m) => m.appliedAt !== null);
+  // Tailoring belongs to a specific CV: `tailored` is the active CV's only, so
+  // after switching CVs the old one's suggestions are not shown as applicable.
+  const { posting: job, activeCv, reading, application, tailored } = state;
+  const applied = state.steps.applied !== null;
   const applicationView: ApplicationView | null = application
     ? {
         id: application.id,
@@ -63,6 +56,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </div>
       </div>
 
+      <PostingReadingPanel reading={reading} tailorHref="#tailor" />
+
       <JobDescription
         jobId={job.id}
         description={job.description}
@@ -82,7 +77,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         />
       </div>
 
-      <div className="space-y-4">
+      <div id="tailor" className="space-y-4 scroll-mt-24">
         <h2 className="font-display text-lg font-semibold">Tailor your CV to this job</h2>
         {!activeCv ? (
           <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { ApplicationStatus, IssueSeverity, RemotePreference } from "@/generated/prisma/client";
+import type { ApplicationMethod, ApplicationStatus, IssueSeverity, RemotePreference } from "@/generated/prisma/client";
 
 // Factories for database-backed tests. Every value is a plausible default so
 // a test only states what it cares about. Rows live in the disposable test
@@ -81,7 +81,16 @@ export async function seedPosting(
 export async function seedMatch(
   profileId: string,
   jobPostingId: string,
-  overrides: { score?: number; isWildcard?: boolean; viewedAt?: Date | null; appliedAt?: Date | null; createdAt?: Date; locationMismatch?: boolean } = {},
+  overrides: {
+    score?: number;
+    isWildcard?: boolean;
+    viewedAt?: Date | null;
+    appliedAt?: Date | null;
+    createdAt?: Date;
+    locationMismatch?: boolean;
+    matchedSkills?: string[];
+    missingSkills?: string[];
+  } = {},
 ) {
   return db.matchScore.create({
     data: {
@@ -93,13 +102,22 @@ export async function seedMatch(
       viewedAt: overrides.viewedAt ?? null,
       appliedAt: overrides.appliedAt ?? null,
       locationMismatch: overrides.locationMismatch ?? false,
+      matchedSkills: overrides.matchedSkills ?? [],
+      missingSkills: overrides.missingSkills ?? [],
       ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
     },
   });
 }
 
-export async function seedApplication(userId: string, jobPostingId: string, status: ApplicationStatus = "DRAFT") {
-  return db.application.create({ data: { userId, jobPostingId, status, subject: "Application", coverNote: "Hello." } });
+export async function seedApplication(
+  userId: string,
+  jobPostingId: string,
+  status: ApplicationStatus = "DRAFT",
+  overrides: { method?: ApplicationMethod; sentAt?: Date } = {},
+) {
+  return db.application.create({
+    data: { userId, jobPostingId, status, subject: "Application", coverNote: "Hello.", method: overrides.method ?? null, sentAt: overrides.sentAt ?? null },
+  });
 }
 
 export async function seedTailoredCv(cvId: string, jobPostingId: string) {
