@@ -41,8 +41,21 @@ export interface CvHealth {
   reviewedAt: Date;
 }
 
+/** The three first-run steps and whether each is done. */
+export interface SetupState {
+  /** A CV of the user's has been parsed. */
+  cvParsed: boolean;
+  /** An active profile exists with a parsed CV attached. */
+  profileWithCv: boolean;
+  /** At least one scoring run has produced matches for the current search. */
+  scored: boolean;
+  /** The first matches exist, so the Overview shows the search rather than the checklist. */
+  complete: boolean;
+}
+
 export interface SearchState {
   profile: SearchProfile | null;
+  setup: SetupState;
   /** The CV attached to the active profile: the one used for matching. */
   activeCv: Cv | null;
   /** Null without an active CV or before its first review. */
@@ -76,13 +89,19 @@ const EMPTY_PIPELINE: PipelineCounts = { scored: 0, strong: 0, opened: 0, prepar
  */
 export async function searchState(userId: string, options: { stage?: PipelineStage | null } = {}): Promise<SearchState> {
   const stage = options.stage ?? null;
-  const profile = await db.searchProfile.findFirst({
-    where: { userId, isActive: true },
-    orderBy: { createdAt: "asc" },
-    include: { activeCv: true },
-  });
+  const [profile, cvs] = await Promise.all([
+    db.searchProfile.findFirst({
+      where: { userId, isActive: true },
+      orderBy: { createdAt: "asc" },
+      include: { activeCv: true },
+    }),
+    db.cv.findMany({ where: { userId }, select: { parsed: true } }),
+  ]);
+  const cvParsed = cvs.some((c) => c.parsed !== null);
+  const profileWithCv = profile?.activeCv?.parsed != null;
   if (!profile) {
-    return { profile: null, activeCv: null, cvHealth: null, flags: [], stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
+    const setup: SetupState = { cvParsed, profileWithCv: false, scored: false, complete: false };
+    return { profile: null, setup, activeCv: null, cvHealth: null, flags: [], stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
   }
   const { activeCv, ...profileRow } = profile;
 
@@ -149,6 +168,9 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
   const distribution = emptyDistribution();
   for (const m of main) distribution[Math.min(DISTRIBUTION_BUCKETS - 1, Math.floor(m.score / 10))] += 1;
 
+  const scored = rows.length > 0;
+  const setup: SetupState = { cvParsed, profileWithCv, scored, complete: scored };
+
   // Attention flags, in order of importance. Each is the count of things
   // behind it; a count of zero means the condition doesn't hold.
   const strongUnopened = main.filter((m) => isStrong(m) && !isOpened(m)).length;
@@ -176,7 +198,7 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
     { kind: "source-errors", count: failingSources, statement: `${plural(failingSources, "job source", "job sources")} reporting an error`, action: { label: "Check sources", href: "/dashboard#sources" } },
   ]);
 
-  return { profile: profileRow, activeCv, cvHealth, flags, stage, matches, pipeline, distribution, lastScoredAt };
+  return { profile: profileRow, setup, activeCv, cvHealth, flags, stage, matches, pipeline, distribution, lastScoredAt };
 }
 
 function attentionFlags(candidates: AttentionFlag[]): AttentionFlag[] {

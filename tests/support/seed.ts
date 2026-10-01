@@ -17,9 +17,18 @@ export async function seedUser(email = `user-${next()}@example.test`) {
   return db.user.create({ data: { email, passwordHash: "not-a-real-hash" } });
 }
 
-export async function seedCv(userId: string) {
+export async function seedCv(userId: string, overrides: { parsed?: boolean } = {}) {
   return db.cv.create({
-    data: { userId, fileName: "cv.pdf", storageKey: `${userId}/cv-${next()}.pdf`, mimeType: "application/pdf", fileSizeBytes: 1234, rawText: "Account manager." },
+    data: {
+      userId,
+      fileName: "cv.pdf",
+      storageKey: `${userId}/cv-${next()}.pdf`,
+      mimeType: "application/pdf",
+      fileSizeBytes: 1234,
+      rawText: "Account manager.",
+      // Parsed by default: most tests want a CV the matcher can use.
+      ...(overrides.parsed === false ? {} : { parsed: { skills: ["Account management"], roles: ["Account Manager"] } }),
+    },
   });
 }
 

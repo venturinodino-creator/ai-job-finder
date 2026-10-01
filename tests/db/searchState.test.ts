@@ -399,4 +399,44 @@ describe("searchState", () => {
       expect(cvHealth).toMatchObject({ cvId: active.id, score: 50, change: null, highIssues: 0 });
     });
   });
+
+  describe("first-run setup", () => {
+    it("reports nothing done for a brand-new account", async () => {
+      const user = await seedUser();
+
+      const { setup } = await searchState(user.id);
+
+      expect(setup).toEqual({ cvParsed: false, profileWithCv: false, scored: false, complete: false });
+    });
+
+    it("counts an uploaded CV only once it is parsed, and a profile only once that CV is attached", async () => {
+      const user = await seedUser();
+      const unparsed = await seedCv(user.id, { parsed: false });
+      await seedProfile(user.id, { activeCvId: unparsed.id });
+
+      const before = await searchState(user.id);
+      expect(before.setup).toMatchObject({ cvParsed: false, profileWithCv: false, scored: false });
+
+      const parsed = await seedCv(user.id);
+      const midway = await searchState(user.id);
+      expect(midway.setup).toMatchObject({ cvParsed: true, profileWithCv: false });
+
+      await db.searchProfile.updateMany({ where: { userId: user.id }, data: { activeCvId: parsed.id } });
+      const ready = await searchState(user.id);
+      expect(ready.setup).toEqual({ cvParsed: true, profileWithCv: true, scored: false, complete: false });
+    });
+
+    it("is complete once the first scoring run has produced matches", async () => {
+      const user = await seedUser();
+      const cv = await seedCv(user.id);
+      const profile = await seedProfile(user.id, { activeCvId: cv.id });
+      const source = await seedSource();
+      const posting = await seedPosting(source.id);
+      await seedMatch(profile.id, posting.id, { score: 30 });
+
+      const { setup } = await searchState(user.id);
+
+      expect(setup).toEqual({ cvParsed: true, profileWithCv: true, scored: true, complete: true });
+    });
+  });
 });
