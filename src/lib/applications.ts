@@ -71,7 +71,7 @@ export async function updateDraft(userId: string, jobPostingId: string, patch: {
 /**
  * EMAIL: sends the note with the chosen CV attached to the posting's address.
  * MANUAL: records that the candidate applied on the company's own site.
- * Either way the job is marked applied and the activity counts once.
+ * Either way the job is marked applied and the activity counts once per posting.
  */
 export async function sendApplication(userId: string, jobPostingId: string, method: ApplicationMethod) {
   const app = await db.application.findUnique({
@@ -117,9 +117,73 @@ export async function sendApplication(userId: string, jobPostingId: string, meth
     where: { jobPostingId, profile: { userId }, appliedAt: null },
     data: { appliedAt: new Date() },
   });
-  await recordActivity(userId, "JOB_APPLIED", { jobPostingId, applicationId: app.id, method });
+  await recordAppliedOnce(userId, jobPostingId, { applicationId: app.id, method });
 
   return updated;
+}
+
+/**
+ * "I already applied": records the posting as applied without a draft or a
+ * cover note, and marks the user's match rows for it. Works when the search
+ * has not scored the posting and when the user has no CV. An existing draft
+ * becomes the applied record and keeps its note; an application that was
+ * already sent or applied is returned as it is.
+ */
+export async function markAlreadyApplied(userId: string, jobPostingId: string) {
+  const job = await db.jobPosting.findUnique({ where: { id: jobPostingId }, select: { id: true } });
+  if (!job) throw new ApiError(404, "Job posting not found");
+
+  const existing = await db.application.findUnique({ where: { userId_jobPostingId: { userId, jobPostingId } } });
+  if (existing && existing.status !== "DRAFT") return existing;
+
+  const now = new Date();
+  const applied = { status: "APPLIED", method: "MANUAL", sentAt: now } as const;
+  const application = existing
+    ? await db.application.update({ where: { id: existing.id }, data: applied })
+    : await db.application.create({ data: { userId, jobPostingId, subject: "", coverNote: "", ...applied } });
+
+  await db.matchScore.updateMany({ where: { jobPostingId, profile: { userId }, appliedAt: null }, data: { appliedAt: now } });
+  await recordAppliedOnce(userId, jobPostingId, { applicationId: application.id, method: "MANUAL" });
+  return application;
+}
+
+/**
+ * Undoes an applied state that did not send an email, so the posting leaves
+ * the Applied stage everywhere: the match rows are cleared, and the record
+ * goes back to a draft when it has a cover note or is removed when it was
+ * only an "I already applied" mark. An emailed application is refused. Not
+ * applied at all is a harmless no-op.
+ */
+export async function undoApplied(userId: string, jobPostingId: string) {
+  const existing = await db.application.findUnique({ where: { userId_jobPostingId: { userId, jobPostingId } } });
+  if (existing?.status === "SENT") throw new ApiError(400, "An application sent by email can't be undone.");
+
+  const cleared = await db.matchScore.updateMany({
+    where: { jobPostingId, profile: { userId }, appliedAt: { not: null } },
+    data: { appliedAt: null },
+  });
+
+  if (existing?.status === "APPLIED") {
+    if (existing.coverNote === "") {
+      await db.application.delete({ where: { id: existing.id } });
+      return { undone: true, application: null };
+    }
+    const draft = await db.application.update({
+      where: { id: existing.id },
+      data: { status: "DRAFT", method: null, sentTo: null, sentAt: null, attachedFileName: null },
+    });
+    return { undone: true, application: draft };
+  }
+  return { undone: cleared.count > 0, application: existing };
+}
+
+/** Applying to a posting earns its points once, however many times it is marked, undone and marked again. */
+async function recordAppliedOnce(userId: string, jobPostingId: string, extra: { applicationId: string; method: ApplicationMethod }) {
+  const already = await db.activityEvent.findFirst({
+    where: { userId, type: "JOB_APPLIED", metadata: { path: ["jobPostingId"], equals: jobPostingId } },
+    select: { id: true },
+  });
+  if (!already) await recordActivity(userId, "JOB_APPLIED", { jobPostingId, ...extra });
 }
 
 /**

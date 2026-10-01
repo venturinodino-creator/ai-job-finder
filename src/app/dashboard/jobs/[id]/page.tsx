@@ -4,7 +4,6 @@ import { markJobViewed } from "@/lib/jobs";
 import { postingState } from "@/lib/searchState";
 import { PostingReadingPanel } from "@/components/PostingReadingPanel";
 import { TailorCvButton } from "@/components/TailorCvButton";
-import { MarkAppliedButton } from "@/components/MarkAppliedButton";
 import { JobDescription } from "@/components/JobDescription";
 import { ApplyPanel, type ApplicationView } from "@/components/ApplyPanel";
 import { TailorChanges, type TailorSuggestion, type EditReport } from "@/components/TailorChanges";
@@ -26,7 +25,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // Tailoring belongs to a specific CV: `tailored` is the active CV's only, so
   // after switching CVs the old one's suggestions are not shown as applicable.
   const { posting: job, activeCv, reading, application, tailored } = state;
-  const applied = state.steps.applied !== null;
+  const applied = state.steps.applied;
   const applicationView: ApplicationView | null = application
     ? {
         id: application.id,
@@ -48,12 +47,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         <p style={{ color: "var(--color-text-muted)" }}>
           {job.company} · {job.location ?? "Location n/a"} · {job.remoteType} · via {job.source.name}
         </p>
-        <div className="flex items-center gap-4">
-          <a href={job.url} target="_blank" rel="noreferrer" className="text-sm underline">
-            View original posting
-          </a>
-          <MarkAppliedButton jobId={job.id} appliedInitially={applied} />
-        </div>
+        <a href={job.url} target="_blank" rel="noreferrer" className="text-sm underline">
+          View original posting
+        </a>
       </div>
 
       <PostingReadingPanel reading={reading} tailorHref="#tailor" />
@@ -74,6 +70,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           attachmentLabel={attachmentLabel}
           emailEnabled={isEmailConfigured()}
           initial={applicationView}
+          appliedInitially={applied ? { method: applied.method, at: applied.at.toISOString() } : null}
         />
       </div>
 
