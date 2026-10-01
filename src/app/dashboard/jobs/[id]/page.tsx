@@ -5,6 +5,10 @@ import { markJobViewed } from "@/lib/jobs";
 import { postingState } from "@/lib/searchState";
 import { backLink, parseOrigin } from "@/lib/postingOrigin";
 import { PostingReadingPanel } from "@/components/PostingReadingPanel";
+import { PostingSteps } from "@/components/PostingSteps";
+import { PostingTags } from "@/components/PostingCard";
+import { postingSteps } from "@/lib/postingSteps";
+import { formatRelative } from "@/lib/formatRelative";
 import { TailorCvButton } from "@/components/TailorCvButton";
 import { JobDescription } from "@/components/JobDescription";
 import { ApplyPanel, type ApplicationView } from "@/components/ApplyPanel";
@@ -46,52 +50,70 @@ export default async function JobDetailPage({ params, searchParams }: { params: 
     : null;
   const attachmentLabel = describeAttachment(activeCv, tailored ? { editedStorageKey: tailored.editedStorageKey } : null);
 
+  const steps = postingSteps({
+    tailored: tailored !== null,
+    draft: application?.status === "DRAFT",
+    applied,
+    appliedWithNote: Boolean(application?.coverNote),
+  });
+  const meta = [
+    job.company,
+    job.location ?? "Location n/a",
+    job.remoteType.replace("_", " ").toLowerCase(),
+    `via ${job.source.name}`,
+    job.postedAt ? `posted ${formatRelative(job.postedAt)}` : null,
+  ].filter(Boolean);
+
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div className="space-y-2">
+    <div className="space-y-6">
+      <header className="space-y-2">
         <Link href={back.href} className="inline-block text-sm underline" style={{ color: "var(--color-text-muted)" }}>
           ← {back.label}
         </Link>
-        <h1 className="font-display text-2xl font-semibold">{job.title}</h1>
-        <p style={{ color: "var(--color-text-muted)" }}>
-          {job.company} · {job.location ?? "Location n/a"} · {job.remoteType} · via {job.source.name}
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="font-display text-2xl font-semibold">{job.title}</h1>
+          <PostingTags
+            reading={{ applied: applied !== null, isWildcard: reading?.isWildcard ?? false, locationMismatch: reading?.locationMismatch ?? false }}
+          />
+        </div>
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          {meta.join(" · ")}
         </p>
-        <a href={job.url} target="_blank" rel="noreferrer" className="text-sm underline">
+        <a href={job.url} target="_blank" rel="noreferrer" className="inline-block text-sm underline">
           View original posting
         </a>
-      </div>
+      </header>
 
-      <PostingReadingPanel reading={reading} tailorHref="#tailor" />
+      {/* Desktop: the work on the left, the reading and the steps in a rail that stays in view.
+          Phone: one column in the order reading, posting, steps. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
+        <aside className="space-y-4 lg:sticky lg:top-24 lg:order-2 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto" aria-label="Match and steps">
+          <PostingReadingPanel reading={reading} tailorHref="#tailor" />
+          <PostingSteps steps={steps} className="hidden lg:block" />
+        </aside>
 
-      <JobDescription
-        jobId={job.id}
-        description={job.description}
-        initialSummary={(job.summary as unknown as JobSummary | null) ?? null}
-      />
+        <div className="min-w-0 space-y-8 lg:order-1">
+          <section id="posting" aria-labelledby="posting-heading" className="space-y-4 scroll-mt-24">
+            <StepHeading id="posting-heading" number={1} title="The posting" />
+            <JobDescription
+              jobId={job.id}
+              description={job.description}
+              initialSummary={(job.summary as unknown as JobSummary | null) ?? null}
+            />
+          </section>
 
-      <div className="space-y-4">
-        <h2 className="font-display text-lg font-semibold">Apply for this role</h2>
-        <ApplyPanel
-          jobId={job.id}
-          jobUrl={job.url}
-          applyEmail={job.applyEmail}
-          hasActiveCv={Boolean(activeCv)}
-          attachmentLabel={attachmentLabel}
-          emailEnabled={isEmailConfigured()}
-          initial={applicationView}
-          appliedInitially={applied ? { method: applied.method, at: applied.at.toISOString() } : null}
-        />
-      </div>
+          {/* On a phone the steps come after the posting, just before the work they point to. */}
+          <PostingSteps steps={steps} className="lg:hidden" />
 
-      <div id="tailor" className="space-y-4 scroll-mt-24">
-        <h2 className="font-display text-lg font-semibold">Tailor your CV to this job</h2>
-        {!activeCv ? (
-          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-            Upload and activate a CV first on the CV page.
-          </p>
-        ) : (
-          <TailorCvButton jobId={job.id} cvId={activeCv.id} />
-        )}
+          <section id="tailor" aria-labelledby="tailor-heading" className="space-y-4 scroll-mt-24">
+            <StepHeading id="tailor-heading" number={2} title="Tailor your CV" note="Optional" />
+            {!activeCv ? (
+              <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                Upload and activate a CV first on the CV page.
+              </p>
+            ) : (
+              <TailorCvButton jobId={job.id} cvId={activeCv.id} />
+            )}
 
         {tailored && (
           <div className="space-y-3">
@@ -136,7 +158,39 @@ export default async function JobDetailPage({ params, searchParams }: { params: 
             />
           </div>
         )}
+          </section>
+
+          <section id="apply" aria-labelledby="apply-heading" className="space-y-4 scroll-mt-24">
+            <StepHeading id="apply-heading" number={3} title="Apply" />
+            <ApplyPanel
+              jobId={job.id}
+              jobUrl={job.url}
+              applyEmail={job.applyEmail}
+              hasActiveCv={Boolean(activeCv)}
+              attachmentLabel={attachmentLabel}
+              emailEnabled={isEmailConfigured()}
+              initial={applicationView}
+              appliedInitially={applied ? { method: applied.method, at: applied.at.toISOString() } : null}
+            />
+          </section>
+        </div>
       </div>
     </div>
+  );
+}
+
+function StepHeading({ id, number, title, note }: { id: string; number: number; title: string; note?: string }) {
+  return (
+    <h2 id={id} className="font-display flex items-baseline gap-3 text-lg font-semibold">
+      <span className="font-data text-sm" style={{ color: "var(--color-text-muted)" }} aria-hidden>
+        {number}
+      </span>
+      {title}
+      {note && (
+        <span className="font-data text-xs font-normal uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>
+          {note}
+        </span>
+      )}
+    </h2>
   );
 }

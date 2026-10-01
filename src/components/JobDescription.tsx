@@ -69,7 +69,7 @@ export function JobDescription({
       <button type="button" className="text-sm underline" onClick={() => setExpanded((v) => !v)}>
         {expanded ? "Hide full description" : "Read full description"}
       </button>
-      {expanded && <div className="card whitespace-pre-wrap text-sm">{description}</div>}
+      {expanded && <div className="card whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">{description}</div>}
     </div>
   );
 }
