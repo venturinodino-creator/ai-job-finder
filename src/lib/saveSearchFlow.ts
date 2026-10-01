@@ -1,0 +1,51 @@
+// The one flow for saving a search, wherever it is saved from: save, then
+// re-score with visible progress, then report done. A failed scoring run
+// keeps the save and can be retried without saving again. The two calls it
+// makes are passed in, so the flow itself has no network or React in it.
+
+export type SavePhase = "idle" | "saving" | "scoring" | "score-failed";
+
+export interface SaveSearchDeps {
+  /** Saves the search; resolves with whether it changed and so needs scoring. Rejects with a message to show. */
+  save(): Promise<{ rescore: boolean }>;
+  /** Runs the scoring run to completion. Rejects with a message to show. */
+  score(): Promise<void>;
+  /** Called on every phase change; `error` accompanies a failure. */
+  onPhase(phase: SavePhase, error?: string): void;
+  /** Called once the flow has finished; `rescored` says whether new scores exist. */
+  onDone(rescored: boolean): void;
+}
+
+export async function runSaveSearch(deps: SaveSearchDeps): Promise<void> {
+  deps.onPhase("saving");
+  let rescore: boolean;
+  try {
+    ({ rescore } = await deps.save());
+  } catch (err) {
+    deps.onPhase("idle", messageOf(err, "Could not save."));
+    return;
+  }
+  if (!rescore) {
+    deps.onPhase("idle");
+    deps.onDone(false);
+    return;
+  }
+  await retryScoring(deps);
+}
+
+/** The scoring half on its own: what a retry runs after a failed scoring run. */
+export async function retryScoring(deps: Pick<SaveSearchDeps, "score" | "onPhase" | "onDone">): Promise<void> {
+  deps.onPhase("scoring");
+  try {
+    await deps.score();
+  } catch (err) {
+    deps.onPhase("score-failed", messageOf(err, "Scoring failed."));
+    return;
+  }
+  deps.onPhase("idle");
+  deps.onDone(true);
+}
+
+function messageOf(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}

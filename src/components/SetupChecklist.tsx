@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { SetupState } from "@/lib/searchState";
+import { ScoringProgress, requestScoringRun } from "@/components/ScoringRun";
 
 type RunState = "idle" | "running" | "failed";
 
@@ -25,11 +26,7 @@ export function SetupChecklist({ setup }: { setup: SetupState }) {
     setRun("running");
     setError(null);
     try {
-      const res = await fetch("/api/digest/run", { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `Scoring failed (HTTP ${res.status}).`);
-      }
+      await requestScoringRun();
       router.refresh();
     } catch (err) {
       setRun("failed");
@@ -69,7 +66,7 @@ export function SetupChecklist({ setup }: { setup: SetupState }) {
       title: "First scoring run",
       detail: readyToScore
         ? run === "running"
-          ? "Scoring today's postings against your profile and CV. This usually takes 1–3 minutes; keep this page open."
+          ? null
           : run === "failed"
             ? (error ?? "Scoring failed.")
             : "Starting…"
@@ -109,16 +106,12 @@ export function SetupChecklist({ setup }: { setup: SetupState }) {
               </span>
               <div className="min-w-0">
                 <p className="font-medium">{step.title}</p>
-                <p className="text-sm" style={{ color: step.key === "score" && run === "failed" ? "var(--color-danger)" : "var(--color-text-muted)" }}>
-                  {step.detail}
-                </p>
-                {step.key === "score" && run === "running" && (
-                  <div className="mt-2 flex items-end gap-[2px]" role="progressbar" aria-label="Scoring in progress" aria-valuetext="In progress, usually 1 to 3 minutes">
-                    {Array.from({ length: 12 }).map((_, s) => (
-                      <span key={s} className="signal-seg block h-2 w-1.5 rounded-[1px] setup-pulse" style={{ backgroundColor: "var(--color-accent)", animationDelay: `${s * 90}ms` }} />
-                    ))}
-                  </div>
+                {step.detail && (
+                  <p className="text-sm" style={{ color: step.key === "score" && run === "failed" ? "var(--color-danger)" : "var(--color-text-muted)" }}>
+                    {step.detail}
+                  </p>
                 )}
+                {step.key === "score" && run === "running" && <ScoringProgress />}
               </div>
             </div>
             {step.href && step.action && (

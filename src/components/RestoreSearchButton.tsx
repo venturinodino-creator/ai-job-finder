@@ -1,22 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { SaveSearchStatus, useSaveSearch } from "@/components/ScoringRun";
 
 /**
- * Puts an archived search's criteria back on the active profile. The PATCH
+ * Puts an archived search's criteria back on the active profile. The save
  * archives the current search (with its results) and flags a re-score, so
- * this behaves exactly like editing the profile by hand.
+ * this goes through the same save-and-re-score flow as editing the profile
+ * by hand: visible progress, landing on Matches, a retry if scoring fails.
  */
 export function RestoreSearchButton({ profileId, snapshot }: { profileId: string; snapshot: Record<string, unknown> }) {
-  const router = useRouter();
-  const [phase, setPhase] = useState<"idle" | "saving" | "rescoring">("idle");
-  const [error, setError] = useState<string | null>(null);
+  const flow = useSaveSearch();
 
-  async function restore() {
-    setPhase("saving");
-    setError(null);
-    try {
+  const restore = () =>
+    flow.save(async () => {
+      // The CV attached now stays; only the criteria come back.
       const { activeCvId: _ignored, ...criteria } = snapshot;
       void _ignored;
       const res = await fetch(`/api/profile/${profileId}`, {
@@ -26,33 +23,15 @@ export function RestoreSearchButton({ profileId, snapshot }: { profileId: string
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to restore search.");
-      if (data.rescore) {
-        setPhase("rescoring");
-        const run = await fetch("/api/digest/run", { method: "POST" });
-        if (!run.ok) {
-          const runData = await run.json().catch(() => ({}));
-          throw new Error(`Criteria restored, but re-scoring failed: ${runData.error ?? run.statusText}.`);
-        }
-      }
-      router.push("/dashboard/jobs");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to restore search.");
-    } finally {
-      setPhase("idle");
-    }
-  }
+      return { rescore: Boolean(data.rescore) };
+    });
 
   return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <button type="button" className="btn-secondary" disabled={phase !== "idle"} onClick={restore}>
-        {phase === "saving" ? "Restoring..." : phase === "rescoring" ? "Re-scoring the feed (30-120s)..." : "Use these criteria again"}
+    <div className="space-y-3">
+      <button type="button" className="btn-secondary" disabled={flow.busy || flow.phase === "score-failed"} onClick={() => void restore()}>
+        {flow.phase === "saving" ? "Restoring..." : "Use these criteria again"}
       </button>
-      {error && (
-        <span className="text-sm" style={{ color: "var(--color-danger)" }}>
-          {error}
-        </span>
-      )}
+      <SaveSearchStatus flow={flow} savedNote="Criteria restored." />
     </div>
   );
 }

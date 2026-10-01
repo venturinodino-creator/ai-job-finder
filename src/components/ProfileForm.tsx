@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { SaveSearchStatus, useSaveSearch } from "@/components/ScoringRun";
 import type { RemotePreference, Seniority, SearchProfile } from "@/generated/prisma/client";
 
 const REMOTE_OPTIONS: RemotePreference[] = ["ANY", "REMOTE", "HYBRID", "ON_SITE"];
@@ -40,7 +40,7 @@ const CURRENCIES: { code: string; max: number; step: number }[] = [
 const DEFAULT_CURRENCY = "USD";
 
 export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
-  const router = useRouter();
+  const flow = useSaveSearch();
   const [targetRoles, setTargetRoles] = useState(profile?.targetRoles.join(", ") ?? "");
   const [locations, setLocations] = useState(profile?.locations.join(", ") ?? "");
   const [remotePref, setRemotePref] = useState<RemotePreference>(profile?.remotePref ?? "ANY");
@@ -51,8 +51,6 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
   const [expectsCommission, setExpectsCommission] = useState(profile?.expectsCommission ?? false);
   const [industries, setIndustries] = useState(profile?.industries.join(", ") ?? "");
   const [languages, setLanguages] = useState(profile?.languages.join(", ") ?? "");
-  const [saving, setSaving] = useState(false);
-  const [phase, setPhase] = useState<"idle" | "rescoring">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const cur = CURRENCIES.find((c) => c.code === currency) ?? { code: currency, max: 300_000, step: 1_000 };
@@ -78,7 +76,6 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
       setError("Minimum salary can't exceed the maximum.");
       return;
     }
-    setSaving(true);
     setError(null);
 
     const payload = {
@@ -94,7 +91,9 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
       languages: splitList(languages),
     };
 
-    try {
+    // Save, then (when the search changed) re-score with visible progress and
+    // land on Matches: the same flow the Archive's restore control uses.
+    await flow.save(async () => {
       const res = await fetch(profile ? `/api/profile/${profile.id}` : "/api/profile", {
         method: profile ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,30 +101,8 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save profile.");
-
-      if (!data.rescore) {
-        router.refresh();
-        return;
-      }
-
-      // The criteria changed, so the feed is re-scored right away (same call
-      // as "Refresh matches now") and we land on it when the run finishes.
-      setPhase("rescoring");
-      const run = await fetch("/api/digest/run", { method: "POST" });
-      if (!run.ok) {
-        const runData = await run.json().catch(() => ({}));
-        throw new Error(
-          `Profile saved, but re-scoring failed: ${runData.error ?? run.statusText}. Use "Refresh matches now" on the job feed.`,
-        );
-      }
-      router.push("/dashboard/jobs");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save profile.");
-    } finally {
-      setSaving(false);
-      setPhase("idle");
-    }
+      return { rescore: Boolean(data.rescore) };
+    });
   }
 
   return (
@@ -240,20 +217,10 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
 
       {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
-      <button type="submit" disabled={saving} className="btn-primary">
-        {phase === "rescoring"
-          ? "Saved — re-scoring the job feed for your new criteria (30-120s)..."
-          : saving
-            ? "Saving..."
-            : profile
-              ? "Save changes"
-              : "Create search profile"}
+      <button type="submit" disabled={flow.busy} className="btn-primary">
+        {flow.phase === "saving" ? "Saving..." : profile ? "Save changes" : "Create search profile"}
       </button>
-      {phase === "rescoring" && (
-        <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-          You&apos;ll be taken to the job feed when the new matches are ready.
-        </p>
-      )}
+      <SaveSearchStatus flow={flow} savedNote="Search saved." />
     </form>
   );
 }
