@@ -70,6 +70,10 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (splitList(targetRoles).length === 0) {
+      setError("Add at least one target role: it is what postings are scored against.");
+      return;
+    }
     if (minNum !== null && maxNum !== null && minNum > maxNum) {
       setError("Minimum salary can't exceed the maximum.");
       return;

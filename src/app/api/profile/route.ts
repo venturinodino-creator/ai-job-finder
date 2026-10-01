@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { handle, requireUserId } from "@/lib/api";
-import { recordActivity } from "@/lib/gamification";
+import { createSearchProfile } from "@/lib/searchProfile";
 
 const profileSchema = z.object({
   name: z.string().min(1).default("Default search"),
@@ -37,15 +37,7 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const userId = await requireUserId();
     const body = profileSchema.parse(await req.json());
-    const profile = await db.searchProfile.create({ data: { ...body, userId } });
-
-    const profileCount = await db.searchProfile.count({ where: { userId } });
-    if (profileCount === 1) {
-      await recordActivity(userId, "PROFILE_CREATED");
-    }
-
     // A brand-new profile has no scores yet; the client kicks off a match run.
-    // Nothing goes to the archive until this search is replaced by another.
-    return NextResponse.json({ profile, rescore: true }, { status: 201 });
+    return NextResponse.json(await createSearchProfile(userId, body), { status: 201 });
   });
 }
