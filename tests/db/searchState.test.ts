@@ -289,7 +289,7 @@ describe("searchState", () => {
       const { flags } = await searchState(user.id);
 
       expect(flags).toHaveLength(1);
-      expect(flags[0]).toMatchObject({ kind: "location-blocked", count: 1, action: { href: "/dashboard/profile" } });
+      expect(flags[0]).toMatchObject({ kind: "location-blocked", count: 1, action: { href: "/dashboard/profile#where" } });
     });
 
     it("does not raise the location flag while any strong match exists", async () => {

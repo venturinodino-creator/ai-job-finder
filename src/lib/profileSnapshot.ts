@@ -48,9 +48,27 @@ export function profileSnapshot(p: ProfileLike): ProfileSnapshot {
   };
 }
 
-/** True when anything that feeds the match agent differs between the two. */
+/**
+ * True when anything that feeds the match agent differs between the two.
+ * Lists are compared as sets, ignoring order and casing, and the currency
+ * only counts when a salary is set, so a reordering or a spelling change
+ * does not replace a search.
+ */
 export function snapshotsDiffer(a: ProfileSnapshot, b: ProfileSnapshot): boolean {
-  return JSON.stringify(a) !== JSON.stringify(b);
+  return JSON.stringify(canonical(a)) !== JSON.stringify(canonical(b));
+}
+
+function canonical(s: ProfileSnapshot) {
+  const set = (list: string[]) => [...new Set(list.map((x) => x.trim().toLowerCase()).filter(Boolean))].sort();
+  const hasSalary = s.salaryMin !== null || s.salaryMax !== null;
+  return {
+    ...s,
+    targetRoles: set(s.targetRoles),
+    locations: set(s.locations),
+    industries: set(s.industries),
+    languages: set(s.languages),
+    salaryCurrency: hasSalary ? s.salaryCurrency : null,
+  };
 }
 
 const REMOTE_LABEL: Record<string, string> = {

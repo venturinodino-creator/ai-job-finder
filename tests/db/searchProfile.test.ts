@@ -72,6 +72,16 @@ describe("search profile", () => {
       expect(await scoredPostings(profile.id)).toHaveLength(3);
     });
 
+    it("does not replace the search for a reordering or a change of casing", async () => {
+      const { user, profile } = await seedSearchWithMatches();
+
+      const result = await updateSearchProfile(user.id, profile.id, { targetRoles: ["account manager"], locations: ["CAPE TOWN"] });
+
+      expect(result.rescore).toBe(false);
+      expect(await archive(user.id)).toHaveLength(0);
+      expect(await scoredPostings(profile.id)).toHaveLength(3);
+    });
+
     it("refuses a save that would leave the search without a target role, and changes nothing", async () => {
       const { user, profile } = await seedSearchWithMatches();
 

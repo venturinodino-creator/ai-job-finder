@@ -32,6 +32,16 @@ describe("profileSnapshot", () => {
     expect(snapshotsDiffer(a, profileSnapshot({ ...base, activeCvId: "cv2" }))).toBe(true);
   });
 
+  it("does not count a reordering, a change of casing or an unused currency as a change", () => {
+    const a = profileSnapshot(base);
+    expect(snapshotsDiffer(a, profileSnapshot({ ...base, targetRoles: [" key account manager", "ACCOUNT MANAGER"] }))).toBe(false);
+    expect(snapshotsDiffer(a, profileSnapshot({ ...base, locations: ["eu", "netherlands"] }))).toBe(false);
+
+    const noSalary = profileSnapshot({ ...base, salaryMin: null, salaryMax: null, salaryCurrency: null });
+    expect(snapshotsDiffer(noSalary, profileSnapshot({ ...base, salaryMin: null, salaryMax: null, salaryCurrency: "USD" }))).toBe(false);
+    expect(snapshotsDiffer(a, profileSnapshot({ ...base, salaryCurrency: "USD" }))).toBe(true);
+  });
+
   it("describes a snapshot in one line", () => {
     expect(describeSnapshot(profileSnapshot(base))).toBe(
       "Account Manager / Key Account Manager · Netherlands, EU · remote · senior · EUR 91k–120k · AI solutions, OpenAI",

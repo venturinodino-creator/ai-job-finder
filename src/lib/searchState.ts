@@ -206,7 +206,7 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
     { kind: "drafts-unsent", count: draftsUnsent, statement: `${plural(draftsUnsent, "application draft", "application drafts")} not sent`, action: { label: "Finish drafts", href: stageHref("/dashboard/jobs", "prepared") } },
     { kind: "cv-high-issues", count: highIssues, statement: `${plural(highIssues, "high-severity issue", "high-severity issues")} open on your CV`, action: { label: "Review CV", href: "/dashboard/cv" } },
     { kind: "new-postings", count: newPostings, statement: `${plural(newPostings, "posting", "postings")} ingested since your last scoring run`, action: { label: "Refresh matches", href: "/dashboard/jobs" } },
-    { kind: "location-blocked", count: wouldBeStrong, statement: `${plural(wouldBeStrong, "role", "roles")} would be strong matches but sit outside your locations`, action: { label: "Widen locations", href: "/dashboard/profile" } },
+    { kind: "location-blocked", count: wouldBeStrong, statement: `${plural(wouldBeStrong, "role", "roles")} would be strong matches but sit outside your locations`, action: { label: "Widen locations", href: "/dashboard/profile#where" } },
     { kind: "source-errors", count: failingSources, statement: `${plural(failingSources, "job source", "job sources")} reporting an error`, action: { label: "Check sources", href: "/dashboard#sources" } },
   ]);
 
