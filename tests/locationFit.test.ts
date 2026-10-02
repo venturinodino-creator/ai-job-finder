@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLocationMismatch, locationFit, placeMatchesRegion } from "../src/lib/locationFit";
+import { describeLocation, isLocationMismatch, locationFit, placeMatchesRegion } from "../src/lib/locationFit";
 
 describe("placeMatchesRegion", () => {
   it("matches cities and codes of a known region, case-insensitively", () => {
@@ -61,5 +61,53 @@ describe("isLocationMismatch", () => {
     expect(isLocationMismatch(["south africa"], "ON_SITE", "Remote", "REMOTE")).toBe(false);
     expect(isLocationMismatch(["south africa"], "ON_SITE", null, "ON_SITE")).toBe(false);
     expect(isLocationMismatch(["south africa"], "ON_SITE", "Durban", "ON_SITE")).toBe(false);
+  });
+});
+
+describe("describeLocation", () => {
+  it("recognises a country by name, code and casing", () => {
+    expect(describeLocation("South Africa")).toMatchObject({ kind: "region", region: "South Africa" });
+    expect(describeLocation("  south   africa ")).toMatchObject({ kind: "region", region: "South Africa" });
+    expect(describeLocation("NL")).toMatchObject({ kind: "region", region: "Netherlands" });
+    expect(describeLocation("UAE")).toMatchObject({ kind: "region", region: "United Arab Emirates" });
+  });
+
+  it("recognises a city and names the region it belongs to", () => {
+    const reading = describeLocation("Cape Town");
+    expect(reading).toMatchObject({ kind: "region", region: "South Africa" });
+    expect(reading.label).toContain("South Africa");
+  });
+
+  it("recognises a named group and says what it covers", () => {
+    const eu = describeLocation("EU");
+    expect(eu.kind).toBe("group");
+    expect(eu.hint).toContain("Netherlands");
+    expect(eu.hint).toContain("Germany");
+    expect(describeLocation("dach")).toMatchObject({ kind: "group" });
+    expect(describeLocation("DACH").hint).toContain("Austria");
+  });
+
+  it("marks anything else as matched only as typed, with a hint to check the spelling", () => {
+    const typo = describeLocation("Cape Twon");
+    expect(typo.kind).toBe("typed");
+    expect(typo.hint).toMatch(/only as typed/i);
+    expect(typo.hint).toContain("Cape Twon");
+    expect(typo.hint).toMatch(/spelling/i);
+  });
+
+  it("explains that a short unknown entry has to match a whole word", () => {
+    expect(describeLocation("xy").hint).toMatch(/whole word/i);
+  });
+
+  it("treats a blank entry as empty", () => {
+    expect(describeLocation("   ")).toMatchObject({ kind: "empty" });
+  });
+
+  it("agrees with the matcher: what it calls recognised does match postings there", () => {
+    for (const place of ["Cape Town", "NL", "EU", "Berlin"]) {
+      expect(describeLocation(place).kind).not.toBe("typed");
+    }
+    expect(placeMatchesRegion("Amsterdam", "EU")).toBe(true);
+    expect(placeMatchesRegion("Amsterdam", "NL")).toBe(true);
   });
 });

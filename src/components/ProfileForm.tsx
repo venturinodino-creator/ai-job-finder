@@ -1,21 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { ChipsInput, type ChipNote } from "@/components/ChipsInput";
 import { SaveSearchStatus, useSaveSearch } from "@/components/ScoringRun";
+import { describeLocation } from "@/lib/locationFit";
+import { REMOTE_LABELS, REMOTE_ORDER, SENIORITY_LABELS, SENIORITY_ORDER, remoteRule } from "@/lib/profileLabels";
 import type { RemotePreference, Seniority, SearchProfile } from "@/generated/prisma/client";
-
-const REMOTE_OPTIONS: RemotePreference[] = ["ANY", "REMOTE", "HYBRID", "ON_SITE"];
-const SENIORITY_OPTIONS: Seniority[] = [
-  "INTERN",
-  "JUNIOR",
-  "MID",
-  "SENIOR",
-  "STAFF",
-  "PRINCIPAL",
-  "MANAGER",
-  "DIRECTOR",
-  "EXECUTIVE",
-];
 
 // Slider ceiling/step per currency: a sensible annual-salary range differs by
 // an order of magnitude between e.g. EUR and ZAR. Typed amounts are never
@@ -41,16 +31,16 @@ const DEFAULT_CURRENCY = "USD";
 
 export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
   const flow = useSaveSearch();
-  const [targetRoles, setTargetRoles] = useState(profile?.targetRoles.join(", ") ?? "");
-  const [locations, setLocations] = useState(profile?.locations.join(", ") ?? "");
+  const [targetRoles, setTargetRoles] = useState<string[]>(profile?.targetRoles ?? []);
+  const [locations, setLocations] = useState<string[]>(profile?.locations ?? []);
   const [remotePref, setRemotePref] = useState<RemotePreference>(profile?.remotePref ?? "ANY");
   const [seniority, setSeniority] = useState<Seniority | "">(profile?.seniority ?? "");
   const [currency, setCurrency] = useState(profile?.salaryCurrency ?? DEFAULT_CURRENCY);
   const [salaryMin, setSalaryMin] = useState(profile?.salaryMin?.toString() ?? "");
   const [salaryMax, setSalaryMax] = useState(profile?.salaryMax?.toString() ?? "");
   const [expectsCommission, setExpectsCommission] = useState(profile?.expectsCommission ?? false);
-  const [industries, setIndustries] = useState(profile?.industries.join(", ") ?? "");
-  const [languages, setLanguages] = useState(profile?.languages.join(", ") ?? "");
+  const [industries, setIndustries] = useState<string[]>(profile?.industries ?? []);
+  const [languages, setLanguages] = useState<string[]>(profile?.languages ?? []);
   const [error, setError] = useState<string | null>(null);
 
   const cur = CURRENCIES.find((c) => c.code === currency) ?? { code: currency, max: 300_000, step: 1_000 };
@@ -68,7 +58,7 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (splitList(targetRoles).length === 0) {
+    if (targetRoles.length === 0) {
       setError("Add at least one target role: it is what postings are scored against.");
       return;
     }
@@ -79,16 +69,16 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
     setError(null);
 
     const payload = {
-      targetRoles: splitList(targetRoles),
-      locations: splitList(locations),
+      targetRoles,
+      locations,
       remotePref,
       seniority: seniority || null,
       salaryMin: minNum,
       salaryMax: maxNum,
       salaryCurrency: currency,
       expectsCommission,
-      industries: splitList(industries),
-      languages: splitList(languages),
+      industries,
+      languages,
     };
 
     // Save, then (when the search changed) re-score with visible progress and
@@ -107,19 +97,28 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 max-w-xl">
-      <Field label="Target role(s)" hint="Comma-separated, e.g. Senior Backend Engineer, Staff Engineer">
-        <input className="input" value={targetRoles} onChange={(e) => setTargetRoles(e.target.value)} />
-      </Field>
+      <ChipsInput
+        label="Target role(s)"
+        hint="Type a role and press Enter or comma, e.g. Senior Backend Engineer. At least one is needed."
+        values={targetRoles}
+        onChange={setTargetRoles}
+        placeholder="Add a role"
+      />
 
-      <Field label="Region / location(s)" hint="Comma-separated, e.g. Berlin, Netherlands, EU">
-        <input className="input" value={locations} onChange={(e) => setLocations(e.target.value)} />
-      </Field>
+      <ChipsInput
+        label="Region / location(s)"
+        hint="Countries, cities or groups such as EU, e.g. Berlin, Netherlands, EU."
+        values={locations}
+        onChange={setLocations}
+        placeholder="Add a place"
+        annotate={annotateLocation}
+      />
 
-      <Field label="Remote preference">
+      <Field label="Remote preference" hint={remoteRule(remotePref, locations)}>
         <select className="input" value={remotePref} onChange={(e) => setRemotePref(e.target.value as RemotePreference)}>
-          {REMOTE_OPTIONS.map((opt) => (
+          {REMOTE_ORDER.map((opt) => (
             <option key={opt} value={opt}>
-              {opt}
+              {REMOTE_LABELS[opt]}
             </option>
           ))}
         </select>
@@ -129,9 +128,9 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
         <Field label="Seniority (optional)">
           <select className="input" value={seniority} onChange={(e) => setSeniority(e.target.value as Seniority | "")}>
             <option value="">No preference</option>
-            {SENIORITY_OPTIONS.map((opt) => (
+            {SENIORITY_ORDER.map((opt) => (
               <option key={opt} value={opt}>
-                {opt}
+                {SENIORITY_LABELS[opt]}
               </option>
             ))}
           </select>
@@ -207,13 +206,9 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
         </div>
       </div>
 
-      <Field label="Industries (optional)" hint="Comma-separated">
-        <input className="input" value={industries} onChange={(e) => setIndustries(e.target.value)} />
-      </Field>
+      <ChipsInput label="Industries (optional)" hint="Type an industry and press Enter or comma." values={industries} onChange={setIndustries} placeholder="Add an industry" />
 
-      <Field label="Languages (optional)" hint="Comma-separated">
-        <input className="input" value={languages} onChange={(e) => setLanguages(e.target.value)} />
-      </Field>
+      <ChipsInput label="Languages (optional)" hint="Languages you work in or that postings require." values={languages} onChange={setLanguages} placeholder="Add a language" />
 
       {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
@@ -295,9 +290,10 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-function splitList(value: string): string[] {
-  return value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+/** What a location chip says about itself: recognised (and where), a group, or matched only as typed. */
+function annotateLocation(value: string): ChipNote {
+  const reading = describeLocation(value);
+  if (reading.kind === "typed") return { tone: "warn", suffix: "as typed", hint: reading.hint };
+  if (reading.kind === "region") return { tone: "ok", suffix: reading.region?.toLowerCase() === value.trim().toLowerCase() ? undefined : `in ${reading.region}`, hint: reading.hint };
+  return { tone: "ok", suffix: "group", hint: reading.hint };
 }

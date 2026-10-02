@@ -114,3 +114,52 @@ export function isLocationMismatch(
   if (remotePref !== "ON_SITE" && remotePref !== "HYBRID") return false;
   return locationFit(profileLocations, jobLocation, jobRemoteType) === "outside";
 }
+
+/** How one typed profile location is read: what the matcher will make of it. */
+export interface LocationReading {
+  kind: "region" | "group" | "typed" | "empty";
+  /** For a region, the region the entry belongs to ("Cape Town" is in "South Africa"). */
+  region?: string;
+  /** A short label for the chip. */
+  label: string;
+  /** One sentence for the user: what the matcher will do with this entry. */
+  hint: string;
+}
+
+/**
+ * Describes one location the user typed, using the same tables the matcher
+ * uses, so what the profile page says is what the matcher does: a known
+ * country, city or code; a named group such as EU; or free text that is
+ * matched only as typed (where a typo silently matches nothing).
+ */
+export function describeLocation(raw: string): LocationReading {
+  const r = normalise(raw);
+  if (!r) return { kind: "empty", label: "", hint: "" };
+
+  const groupMembers = REGION_GROUPS[r];
+  if (groupMembers) {
+    return {
+      kind: "group",
+      label: `${raw.trim()} · group of ${groupMembers.length}`,
+      hint: `${raw.trim()} covers ${groupMembers.map(titleCase).join(", ")}.`,
+    };
+  }
+
+  const key = Object.keys(REGIONS).find((k) => k === r || REGIONS[k].includes(r));
+  if (key) {
+    const region = titleCase(key);
+    const label = key === r ? region : `${raw.trim()} · in ${region}`;
+    return { kind: "region", region, label, hint: `Recognised: postings in ${region} match.` };
+  }
+
+  const how = r.length <= 3 ? "as a whole word" : "as part of a posting's location";
+  return {
+    kind: "typed",
+    label: `${raw.trim()} · as typed`,
+    hint: `"${raw.trim()}" is not a known place or region, so it will be matched only as typed, ${how}. Check the spelling.`,
+  };
+}
+
+function titleCase(text: string): string {
+  return text.replace(/\b\w/g, (c) => c.toUpperCase());
+}
