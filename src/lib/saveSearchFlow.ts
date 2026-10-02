@@ -6,35 +6,39 @@
 export type SavePhase = "idle" | "saving" | "scoring" | "score-failed";
 
 export interface SaveSearchDeps {
-  /** Saves the search; resolves with whether it changed and so needs scoring. Rejects with a message to show. */
-  save(): Promise<{ rescore: boolean }>;
+  /**
+   * Saves the search; resolves with whether it changed and so needs scoring,
+   * and optionally where to land afterwards. Rejects with a message to show.
+   */
+  save(): Promise<{ rescore: boolean; land?: string }>;
   /** Runs the scoring run to completion. Rejects with a message to show. */
   score(): Promise<void>;
   /** Called on every phase change; `error` accompanies a failure. */
   onPhase(phase: SavePhase, error?: string): void;
-  /** Called once the flow has finished; `rescored` says whether new scores exist. */
-  onDone(rescored: boolean): void;
+  /** Called once the flow has finished; `rescored` says whether new scores exist, `land` where the save asked to go. */
+  onDone(rescored: boolean, land?: string): void;
 }
 
 export async function runSaveSearch(deps: SaveSearchDeps): Promise<void> {
   deps.onPhase("saving");
   let rescore: boolean;
+  let land: string | undefined;
   try {
-    ({ rescore } = await deps.save());
+    ({ rescore, land } = await deps.save());
   } catch (err) {
     deps.onPhase("idle", messageOf(err, "Could not save."));
     return;
   }
   if (!rescore) {
     deps.onPhase("idle");
-    deps.onDone(false);
+    deps.onDone(false, land);
     return;
   }
-  await retryScoring(deps);
+  await retryScoring(deps, land);
 }
 
 /** The scoring half on its own: what a retry runs after a failed scoring run. */
-export async function retryScoring(deps: Pick<SaveSearchDeps, "score" | "onPhase" | "onDone">): Promise<void> {
+export async function retryScoring(deps: Pick<SaveSearchDeps, "score" | "onPhase" | "onDone">, land?: string): Promise<void> {
   deps.onPhase("scoring");
   try {
     await deps.score();
@@ -43,7 +47,7 @@ export async function retryScoring(deps: Pick<SaveSearchDeps, "score" | "onPhase
     return;
   }
   deps.onPhase("idle");
-  deps.onDone(true);
+  deps.onDone(true, land);
 }
 
 function messageOf(err: unknown, fallback: string): string {

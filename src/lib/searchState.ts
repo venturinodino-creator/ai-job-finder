@@ -47,6 +47,8 @@ export interface CvHealth {
 export interface SetupState {
   /** A CV of the user's has been parsed. */
   cvParsed: boolean;
+  /** An active search profile exists, with or without a CV attached. */
+  hasProfile: boolean;
   /** An active profile exists with a parsed CV attached. */
   profileWithCv: boolean;
   /** At least one scoring run has produced matches for the current search. */
@@ -110,7 +112,7 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
   const cvParsed = cvs.some((c) => c.parsed !== null);
   const profileWithCv = profile?.activeCv?.parsed != null;
   if (!profile) {
-    const setup: SetupState = { cvParsed, profileWithCv: false, scored: false, complete: false };
+    const setup: SetupState = { cvParsed, hasProfile: false, profileWithCv: false, scored: false, complete: false };
     return { profile: null, scoring: { running: false, startedAt: null }, setup, activeCv: null, cvHealth: null, flags: [], stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
   }
   const { activeCv, ...profileRow } = profile;
@@ -179,7 +181,7 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
   for (const m of main) distribution[Math.min(DISTRIBUTION_BUCKETS - 1, Math.floor(m.score / 10))] += 1;
 
   const scored = rows.length > 0;
-  const setup: SetupState = { cvParsed, profileWithCv, scored, complete: scored };
+  const setup: SetupState = { cvParsed, hasProfile: true, profileWithCv, scored, complete: scored };
 
   // Attention flags, in order of importance. Each is the count of things
   // behind it; a count of zero means the condition doesn't hold.

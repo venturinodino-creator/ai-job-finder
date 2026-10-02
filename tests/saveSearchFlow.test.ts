@@ -6,7 +6,7 @@ import { retryScoring, runSaveSearch, type SavePhase } from "../src/lib/saveSear
 // be retried without saving again. Tested with plain fakes for the two
 // calls it makes, looking only at the phases it reports and what it calls.
 
-function harness(opts: { save?: () => Promise<{ rescore: boolean }>; score?: () => Promise<void> } = {}) {
+function harness(opts: { save?: () => Promise<{ rescore: boolean; land?: string }>; score?: () => Promise<void> } = {}) {
   const log: string[] = [];
   const phases: [SavePhase, string | undefined][] = [];
   const deps = {
@@ -19,7 +19,7 @@ function harness(opts: { save?: () => Promise<{ rescore: boolean }>; score?: () 
       if (opts.score) await opts.score();
     },
     onPhase: (phase: SavePhase, error?: string) => phases.push([phase, error]),
-    onDone: (rescored: boolean) => log.push(`done:${rescored ? "rescored" : "saved"}`),
+    onDone: (rescored: boolean, land?: string) => log.push(`done:${rescored ? "rescored" : "saved"}${land ? `@${land}` : ""}`),
   };
   return { deps, log, phases };
 }
@@ -41,6 +41,22 @@ describe("runSaveSearch", () => {
 
     expect(log).toEqual(["save", "done:saved"]);
     expect(phases.map((p) => p[0])).toEqual(["saving", "idle"]);
+  });
+
+  it("passes on where a save that needs no scoring says to land", async () => {
+    const { deps, log } = harness({ save: async () => ({ rescore: false, land: "/dashboard" }) });
+
+    await runSaveSearch(deps);
+
+    expect(log).toEqual(["save", "done:saved@/dashboard"]);
+  });
+
+  it("passes on where to land after scoring too", async () => {
+    const { deps, log } = harness({ save: async () => ({ rescore: true, land: "/dashboard" }) });
+
+    await runSaveSearch(deps);
+
+    expect(log).toEqual(["save", "score", "done:rescored@/dashboard"]);
   });
 
   it("reports a failed save with its message and never scores", async () => {

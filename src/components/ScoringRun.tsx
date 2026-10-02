@@ -79,15 +79,16 @@ export function useSaveSearch(destination = "/dashboard/jobs") {
     setError(message ?? null);
   }, []);
   const onDone = useCallback(
-    (rescored: boolean) => {
-      if (rescored) router.push(destination);
+    (rescored: boolean, land?: string) => {
+      if (land) router.push(land);
+      else if (rescored) router.push(destination);
       router.refresh();
     },
     [router, destination],
   );
 
   const save = useCallback(
-    (doSave: () => Promise<{ rescore: boolean }>) => runSaveSearch({ save: doSave, score: requestScoringRun, onPhase, onDone }),
+    (doSave: () => Promise<{ rescore: boolean; land?: string }>) => runSaveSearch({ save: doSave, score: requestScoringRun, onPhase, onDone }),
     [onPhase, onDone],
   );
   const retry = useCallback(() => retryScoring({ score: requestScoringRun, onPhase, onDone }), [onPhase, onDone]);

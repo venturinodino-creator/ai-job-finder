@@ -99,15 +99,78 @@ describe("search profile", () => {
   });
 
   describe("creating the first search", () => {
-    it("creates the profile, asks for a re-score and records the activity once", async () => {
+    it("creates the profile, asks for no re-score (the setup checklist starts the first run) and records the activity once", async () => {
       const user = await seedUser();
 
       const first = await createSearchProfile(user.id, { targetRoles: ["Account Manager"], locations: ["Cape Town"] });
       await createSearchProfile(user.id, { targetRoles: ["Channel Manager"] });
 
-      expect(first.rescore).toBe(true);
+      expect(first.rescore).toBe(false);
       expect(first.profile).toMatchObject({ userId: user.id, targetRoles: ["Account Manager"], remotePref: "ANY", isActive: true });
       expect(await db.activityEvent.count({ where: { userId: user.id, type: "PROFILE_CREATED" } })).toBe(1);
+    });
+
+    it("attaches the most recent parsed CV", async () => {
+      const user = await seedUser();
+      const older = await seedCv(user.id);
+      const newer = await seedCv(user.id);
+      await db.cv.update({ where: { id: older.id }, data: { createdAt: new Date(Date.now() - 86_400_000) } });
+
+      const { profile } = await createSearchProfile(user.id, { targetRoles: ["Account Manager"] });
+
+      expect(profile.activeCvId).toBe(newer.id);
+    });
+
+    it("skips a CV that is not parsed yet, taking the newest one that is", async () => {
+      const user = await seedUser();
+      const parsed = await seedCv(user.id);
+      const unparsed = await seedCv(user.id, { parsed: false });
+      await db.cv.update({ where: { id: parsed.id }, data: { createdAt: new Date(Date.now() - 86_400_000) } });
+      expect(unparsed.id).not.toBe(parsed.id);
+
+      const { profile } = await createSearchProfile(user.id, { targetRoles: ["Account Manager"] });
+
+      expect(profile.activeCvId).toBe(parsed.id);
+    });
+
+    it("creates the profile without a CV when the user has none, or only an unparsed one", async () => {
+      const nobody = await seedUser();
+      expect((await createSearchProfile(nobody.id, { targetRoles: ["Account Manager"] })).profile.activeCvId).toBeNull();
+
+      const unparsedOnly = await seedUser();
+      await seedCv(unparsedOnly.id, { parsed: false });
+      expect((await createSearchProfile(unparsedOnly.id, { targetRoles: ["Account Manager"] })).profile.activeCvId).toBeNull();
+    });
+
+    it("reports a profile that exists but has no CV yet, so the checklist can say so", async () => {
+      const user = await seedUser();
+
+      await createSearchProfile(user.id, { targetRoles: ["Account Manager"] });
+
+      expect((await searchState(user.id)).setup).toEqual({ cvParsed: false, hasProfile: true, profileWithCv: false, scored: false, complete: false });
+    });
+
+    it("keeps a CV the caller chose, and never takes another user's CV", async () => {
+      const user = await seedUser();
+      const chosen = await seedCv(user.id);
+      await seedCv(user.id);
+      const stranger = await seedUser();
+      await seedCv(stranger.id);
+
+      const { profile } = await createSearchProfile(user.id, { targetRoles: ["Account Manager"], activeCvId: chosen.id });
+      expect(profile.activeCvId).toBe(chosen.id);
+
+      const loner = await seedUser();
+      expect((await createSearchProfile(loner.id, { targetRoles: ["Account Manager"] })).profile.activeCvId).toBeNull();
+    });
+
+    it("lets the Search state module see the first two setup steps done, ready for the first run", async () => {
+      const user = await seedUser();
+      await seedCv(user.id);
+
+      await createSearchProfile(user.id, { targetRoles: ["Account Manager"] });
+
+      expect((await searchState(user.id)).setup).toEqual({ cvParsed: true, hasProfile: true, profileWithCv: true, scored: false, complete: false });
     });
 
     it("refuses a profile with no target role", async () => {

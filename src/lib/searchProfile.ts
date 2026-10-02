@@ -29,7 +29,7 @@ export interface SearchProfileFields {
 
 export interface SavedSearch {
   profile: SearchProfile;
-  /** The search changed (or is new), so its postings need scoring. */
+  /** The search changed, so its postings need scoring. Never true for a newly created search. */
   rescore: boolean;
 }
 
@@ -37,18 +37,29 @@ const LIST_FIELDS = ["targetRoles", "locations", "industries", "languages"] as c
 
 /**
  * Creates a search profile for the user. A search needs at least one target
- * role. A new profile has no scores, so it always asks for a re-score, and
- * nothing goes to the Archive until this search is replaced by another.
+ * role. The user's first profile is attached to their most recent parsed CV
+ * when they did not choose one, so a new user does not have to visit the CV
+ * page to connect the two. Nothing is scored here: a new profile has no
+ * scores to replace, and the setup checklist starts the first run once a CV
+ * is attached, which is why this never asks for a re-score. Nothing goes to
+ * the Archive until this search is replaced by another.
  */
 export async function createSearchProfile(userId: string, fields: SearchProfileFields): Promise<SavedSearch> {
   const data = normalise(fields);
   requireRole(data.targetRoles ?? []);
 
+  const isFirst = (await db.searchProfile.count({ where: { userId } })) === 0;
+  if (data.activeCvId === undefined && isFirst) data.activeCvId = (await newestParsedCvId(userId)) ?? undefined;
+
   const profile = await db.searchProfile.create({ data: { ...data, userId } });
-  if ((await db.searchProfile.count({ where: { userId } })) === 1) {
-    await recordActivity(userId, "PROFILE_CREATED");
-  }
-  return { profile, rescore: true };
+  if (isFirst) await recordActivity(userId, "PROFILE_CREATED");
+  return { profile, rescore: false };
+}
+
+/** The user's most recently uploaded CV that has been parsed, or null. */
+async function newestParsedCvId(userId: string): Promise<string | null> {
+  const cvs = await db.cv.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, select: { id: true, parsed: true } });
+  return cvs.find((cv) => cv.parsed !== null)?.id ?? null;
 }
 
 /**

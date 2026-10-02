@@ -91,7 +91,9 @@ export function ProfileForm({ profile }: { profile: SearchProfile | null }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save profile.");
-      return { rescore: Boolean(data.rescore) };
+      // A new profile has no scores to replace: the Overview's setup checklist
+      // takes it from here and starts the first run once a CV is attached.
+      return { rescore: Boolean(data.rescore), land: profile ? undefined : "/dashboard" };
     });
   }
 

@@ -59,9 +59,13 @@ export function SetupChecklist({ setup, scoringRunning = false }: { setup: Setup
       key: "profile",
       done: setup.profileWithCv,
       title: "Set up your search profile",
-      detail: setup.profileWithCv ? "Target roles set, CV attached." : "Target roles and locations, with your CV attached to the profile.",
+      detail: setup.profileWithCv
+        ? "Target roles set, CV attached."
+        : setup.hasProfile
+          ? "Profile saved. Upload a CV, then choose 'Use for search' on the CV page to attach it."
+          : "Target roles and locations. Your newest CV is attached to it automatically.",
       href: "/dashboard/profile",
-      action: setup.profileWithCv ? "Edit profile" : "Set up profile",
+      action: setup.hasProfile ? "Edit profile" : "Set up profile",
     },
     {
       key: "score",
