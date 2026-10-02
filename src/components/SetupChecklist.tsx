@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { SetupState } from "@/lib/searchState";
-import { ScoringProgress, requestScoringRun } from "@/components/ScoringRun";
+import { ScoringProgress, requestScoringRun, useScoringWatch } from "@/components/ScoringRun";
 
 type RunState = "idle" | "running" | "failed";
 
@@ -15,12 +15,15 @@ type RunState = "idle" | "running" | "failed";
  * first scoring run starts on its own; the page shows that it is running
  * and how long it usually takes, and offers a retry if it fails.
  */
-export function SetupChecklist({ setup }: { setup: SetupState }) {
+export function SetupChecklist({ setup, scoringRunning = false }: { setup: SetupState; scoringRunning?: boolean }) {
   const router = useRouter();
   const [run, setRun] = useState<RunState>("idle");
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
   const readyToScore = setup.cvParsed && setup.profileWithCv && !setup.scored;
+  // A run another tab or the server started: show it and wait for it, don't start a second.
+  const running = run === "running" || (scoringRunning && run === "idle");
+  useScoringWatch(scoringRunning);
 
   const startRun = async () => {
     setRun("running");
@@ -36,12 +39,12 @@ export function SetupChecklist({ setup }: { setup: SetupState }) {
 
   // Starts once per page load, not on every re-render or Strict Mode remount.
   useEffect(() => {
-    if (readyToScore && !startedRef.current) {
+    if (readyToScore && !scoringRunning && !startedRef.current) {
       startedRef.current = true;
       void startRun();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readyToScore]);
+  }, [readyToScore, scoringRunning]);
 
   const steps = [
     {
@@ -65,7 +68,7 @@ export function SetupChecklist({ setup }: { setup: SetupState }) {
       done: setup.scored,
       title: "First scoring run",
       detail: readyToScore
-        ? run === "running"
+        ? running
           ? null
           : run === "failed"
             ? (error ?? "Scoring failed.")
@@ -78,7 +81,7 @@ export function SetupChecklist({ setup }: { setup: SetupState }) {
   const doneCount = steps.filter((s) => s.done).length;
 
   return (
-    <section className="card space-y-4" aria-label="Setup checklist" aria-busy={run === "running"}>
+    <section className="card space-y-4" aria-label="Setup checklist" aria-busy={running}>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <p className="eyebrow">Getting started</p>
@@ -111,7 +114,7 @@ export function SetupChecklist({ setup }: { setup: SetupState }) {
                     {step.detail}
                   </p>
                 )}
-                {step.key === "score" && run === "running" && <ScoringProgress />}
+                {step.key === "score" && running && <ScoringProgress />}
               </div>
             </div>
             {step.href && step.action && (

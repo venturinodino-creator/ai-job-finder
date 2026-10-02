@@ -6,6 +6,7 @@ import { SignalStrip, type SignalReading } from "@/components/SignalStrip";
 import { FeedTabs, type FeedTab } from "@/components/FeedTabs";
 import { Reveal } from "@/components/Reveal";
 import { PostingCard } from "@/components/PostingCard";
+import { ScoringBanner } from "@/components/ScoringRun";
 import { postingFromMatch } from "@/lib/posting";
 import type { PostingOrigin } from "@/lib/postingOrigin";
 import { PIPELINE_STAGE_LABELS, STRONG_MATCH_MIN, parseStage, searchState, type MatchWithJob } from "@/lib/searchState";
@@ -46,7 +47,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   }
 
   const { strong, wildcards, other } = state.matches;
-  const { pipeline, distribution, lastScoredAt: lastRun } = state;
+  const { pipeline, distribution, lastScoredAt: lastRun, scoring } = state;
   const hasMatches = pipeline.scored > 0;
   // Cards carry this view and its filter so a posting can lead back here.
   const origin: PostingOrigin = { view: "matches", stage };
@@ -96,6 +97,8 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         <RefreshMatchesButton />
       </div>
 
+      {scoring.running && <ScoringBanner hasScores={hasMatches} />}
+
       {hasMatches ? (
         <Reveal>
           <SignalStrip
@@ -105,11 +108,21 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
             caption={lastRun ? `Last scored ${formatRelative(lastRun)} · ${profile.targetRoles.join(", ") || "no target roles set"}` : ""}
           />
         </Reveal>
-      ) : (
+      ) : scoring.running ? null : (
         <div className="card" style={{ borderStyle: "dashed" }}>
           <p className="font-medium">No matches yet</p>
           <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-            Upload a CV and set it active on your search profile, then choose &quot;Refresh matches now&quot; to score today&apos;s postings.
+            {state.setup.profileWithCv ? (
+              <>Choose &quot;Refresh matches now&quot; to score today&apos;s postings against your search.</>
+            ) : (
+              <>
+                Your search has no CV attached yet. Attach one on the{" "}
+                <Link href="/dashboard/cv" className="underline">
+                  CV page
+                </Link>
+                , then choose &quot;Refresh matches now&quot;.
+              </>
+            )}
           </p>
         </div>
       )}

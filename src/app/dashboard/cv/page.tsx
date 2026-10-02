@@ -5,6 +5,8 @@ import { PendingReview } from "@/components/PendingReview";
 import { DeleteCvButton } from "@/components/DeleteCvButton";
 import { SetActiveCvButton } from "@/components/SetActiveCvButton";
 import { SignalBar } from "@/components/SignalBar";
+import { ScoringBanner } from "@/components/ScoringRun";
+import { isScoringRunning } from "@/lib/scoringRun";
 
 const VERDICT_LABEL: Record<string, { text: string; tone: "secondary" | "accent" }> = {
   STRONG: { text: "Strong", tone: "secondary" },
@@ -36,6 +38,9 @@ export default async function CvPage() {
         </p>
         <CvUploadForm />
       </div>
+
+      {/* Attaching a CV re-scores the search; say so from the server's state, so the page still shows it after a refresh. */}
+      {isScoringRunning(profile?.scoringStartedAt ?? null) && <ScoringBanner hasScores={false} />}
 
       <div className="space-y-4">
         {cvs.length === 0 && (

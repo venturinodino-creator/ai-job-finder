@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { OUTSIDE_LOCATION_PENALTY } from "@/lib/locationFit";
 import { stageHref } from "@/lib/pipelineStages";
+import { isScoringRunning } from "@/lib/scoringRun";
 import type { Application, ApplicationMethod, Cv, CvVerdict, JobPosting, JobSource, MatchScore, SearchProfile, TailoredCv } from "@/generated/prisma/client";
 import type { PostingReading } from "@/lib/posting";
 
@@ -54,8 +55,16 @@ export interface SetupState {
   complete: boolean;
 }
 
+/** Whether a scoring run for the current search is in flight, and since when. */
+export interface ScoringState {
+  running: boolean;
+  startedAt: Date | null;
+}
+
 export interface SearchState {
   profile: SearchProfile | null;
+  /** A run is writing this search's scores right now; the scores on screen are about to change. */
+  scoring: ScoringState;
   setup: SetupState;
   /** The CV attached to the active profile: the one used for matching. */
   activeCv: Cv | null;
@@ -102,7 +111,7 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
   const profileWithCv = profile?.activeCv?.parsed != null;
   if (!profile) {
     const setup: SetupState = { cvParsed, profileWithCv: false, scored: false, complete: false };
-    return { profile: null, setup, activeCv: null, cvHealth: null, flags: [], stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
+    return { profile: null, scoring: { running: false, startedAt: null }, setup, activeCv: null, cvHealth: null, flags: [], stage, matches: { strong: [], wildcards: [], other: [] }, pipeline: { ...EMPTY_PIPELINE }, distribution: emptyDistribution(), lastScoredAt: null };
   }
   const { activeCv, ...profileRow } = profile;
 
@@ -199,7 +208,9 @@ export async function searchState(userId: string, options: { stage?: PipelineSta
     { kind: "source-errors", count: failingSources, statement: `${plural(failingSources, "job source", "job sources")} reporting an error`, action: { label: "Check sources", href: "/dashboard#sources" } },
   ]);
 
-  return { profile: profileRow, setup, activeCv, cvHealth, flags, stage, matches, pipeline, distribution, lastScoredAt };
+  const scoring: ScoringState = { running: isScoringRunning(profile.scoringStartedAt), startedAt: profile.scoringStartedAt };
+
+  return { profile: profileRow, scoring, setup, activeCv, cvHealth, flags, stage, matches, pipeline, distribution, lastScoredAt };
 }
 
 function attentionFlags(candidates: AttentionFlag[]): AttentionFlag[] {

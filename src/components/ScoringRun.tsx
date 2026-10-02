@@ -1,19 +1,51 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { retryScoring, runSaveSearch, type SavePhase } from "@/lib/saveSearchFlow";
 
 /** What a scoring run usually takes, said the same way everywhere. */
 export const SCORING_DURATION = "This usually takes 1–3 minutes; keep this page open.";
 
-/** Starts the on-demand scoring run and resolves when it has finished; rejects with a message to show. */
+/**
+ * Starts the on-demand scoring run and resolves when it has finished; rejects
+ * with a message to show. A run already in flight (409) is not a failure:
+ * the page it lands on shows that run's progress and refreshes itself.
+ */
 export async function requestScoringRun(): Promise<void> {
   const res = await fetch("/api/digest/run", { method: "POST" });
+  if (res.status === 409) return;
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error ?? `Scoring failed (HTTP ${res.status}).`);
   }
+}
+
+/** How often a page that knows a run is in flight asks the server whether it has finished. */
+const WATCH_INTERVAL_MS = 5000;
+
+/** While `active`, refreshes the page's server data every few seconds, so a run's scores appear when it ends. */
+export function useScoringWatch(active: boolean) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => router.refresh(), WATCH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [active, router]);
+}
+
+/**
+ * Shown while the server says a scoring run is in flight for the search:
+ * progress and the usual duration, and the page refreshes itself until the
+ * run ends. `hasScores` says whether the scores below are about to change.
+ */
+export function ScoringBanner({ hasScores }: { hasScores: boolean }) {
+  useScoringWatch(true);
+  return (
+    <div className="card" aria-busy="true" style={{ borderColor: "var(--color-accent)" }}>
+      <ScoringProgress label={hasScores ? "Re-scoring your search; the matches below are about to change." : "Scoring today's postings for your search."} />
+    </div>
+  );
 }
 
 /** The progress display for a scoring run in flight: the signal segments breathing, and how long it takes. */

@@ -1,19 +1,35 @@
 import { Resend } from "resend";
 import { db } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { withScoringRun } from "@/lib/scoringRun";
 import { runMatchForProfile } from "./match";
 
 const MAIN_ENTRIES_PER_DIGEST = 10;
 const WILDCARD_ENTRIES_PER_DIGEST = 3;
 
-/** Re-scores every active profile for `userId`, then compiles + sends today's digest. */
+/** Every active search of the user is already being scored by another run. */
+export class ScoringBusyError extends Error {
+  constructor() {
+    super("A scoring run is already in progress for your search. Its matches appear when it finishes.");
+  }
+}
+
+/**
+ * Re-scores every active profile for `userId`, then compiles + sends today's
+ * digest. A search whose run is already in flight (another tab, the nightly
+ * job) is left to that run; when that is true of all of them this throws
+ * ScoringBusyError instead of racing it.
+ */
 export async function runDigestForUser(userId: string) {
   const profiles = await db.searchProfile.findMany({ where: { userId, isActive: true } });
   if (profiles.length === 0) return null;
 
+  let ran = 0;
   for (const profile of profiles) {
-    await runMatchForProfile(profile.id);
+    const outcome = await withScoringRun(profile.id, () => runMatchForProfile(profile.id));
+    if (outcome.ran) ran += 1;
   }
+  if (ran === 0) throw new ScoringBusyError();
 
   const today = startOfToday();
   const digest = await db.dailyDigest.upsert({
@@ -72,7 +88,12 @@ export async function runDigestAll() {
   });
   const results = [];
   for (const user of users) {
-    results.push(await runDigestForUser(user.id));
+    try {
+      results.push(await runDigestForUser(user.id));
+    } catch (err) {
+      if (err instanceof ScoringBusyError) continue; // being scored by another run already
+      throw err;
+    }
   }
   return results;
 }

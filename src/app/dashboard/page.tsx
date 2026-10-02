@@ -7,6 +7,7 @@ import { ProgressStrip } from "@/components/ProgressStrip";
 import { AttentionFlags } from "@/components/AttentionFlags";
 import { CvHealthCard } from "@/components/CvHealthCard";
 import { SetupChecklist } from "@/components/SetupChecklist";
+import { ScoringBanner } from "@/components/ScoringRun";
 import { Pipeline } from "@/components/Pipeline";
 import { Reveal } from "@/components/Reveal";
 import { IngestSourcesPanel } from "@/components/IngestSourcesPanel";
@@ -23,7 +24,7 @@ export default async function DashboardPage() {
       select: { key: true, enabled: true, lastFetchedAt: true, lastError: true, _count: { select: { postings: true } } },
     }),
   ]);
-  const { profile, setup, pipeline, lastScoredAt, flags, activeCv, cvHealth } = state;
+  const { profile, setup, scoring, pipeline, lastScoredAt, flags, activeCv, cvHealth } = state;
   const sources = buildSourceStatus(
     jobSourceAdapters,
     sourceRows.map((r) => ({ key: r.key, enabled: r.enabled, lastFetchedAt: r.lastFetchedAt, lastError: r.lastError, postings: r._count.postings })),
@@ -45,12 +46,15 @@ export default async function DashboardPage() {
       {/* Until the first matches exist, the checklist stands in for the numbers. */}
       {!setup.complete ? (
         <Reveal>
-          <SetupChecklist setup={setup} />
+          <SetupChecklist setup={setup} scoringRunning={scoring.running} />
         </Reveal>
       ) : (
-        <Reveal>
-          <Pipeline counts={pipeline} linkBase="/dashboard/jobs" caption={caption} />
-        </Reveal>
+        <>
+          {scoring.running && <ScoringBanner hasScores />}
+          <Reveal>
+            <Pipeline counts={pipeline} linkBase="/dashboard/jobs" caption={caption} />
+          </Reveal>
+        </>
       )}
 
       {setup.complete && (

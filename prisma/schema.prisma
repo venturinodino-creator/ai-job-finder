@@ -94,6 +94,10 @@ model SearchProfile {
   activeCvId String?
   activeCv   Cv?     @relation("ProfileActiveCv", fields: [activeCvId], references: [id])
 
+  // Set while a scoring run for this search is in flight, so pages can say
+  // "scoring" instead of "no matches" and a second run cannot start.
+  scoringStartedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

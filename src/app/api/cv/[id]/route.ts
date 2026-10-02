@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ApiError, handle, requireUserId } from "@/lib/api";
 import { getStorage } from "@/lib/storage";
 import { levelForPoints } from "@/lib/gamification";
+import { updateSearchProfile } from "@/lib/searchProfile";
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
@@ -24,8 +25,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       select: { editedStorageKey: true },
     });
 
+    // A search without its CV is a different search: file the one that used
+    // this CV in the Archive and drop the scores it earned, rather than
+    // leaving them on screen against a CV that no longer exists.
+    const usingIt = await db.searchProfile.findMany({ where: { userId, activeCvId: id }, select: { id: true } });
+    for (const profile of usingIt) await updateSearchProfile(userId, profile.id, { activeCvId: null });
+
     await db.$transaction(async (tx) => {
-      await tx.searchProfile.updateMany({ where: { activeCvId: id }, data: { activeCvId: null } });
       await tx.tailoredCv.deleteMany({ where: { cvId: id } });
       await tx.cv.delete({ where: { id } });
 
