@@ -4,6 +4,8 @@ import { CompanySearch, type CompanyPosting } from "@/components/CompanySearch";
 import { groupPostingsByCompany, parseCompanyQuery } from "@/lib/companySearch";
 import { listRecentSearches, recordSearch } from "@/lib/searchHistory";
 import { RecentSearchesCard } from "@/components/RecentSearchesCard";
+import { PageHero } from "@/components/PageHero";
+import { Reveal } from "@/components/Reveal";
 
 type SearchParams = Promise<{ companies?: string | string[] }>;
 
@@ -23,11 +25,22 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Se
     const names = groups.map((g) => g.name);
     await recordSearch(userId, "COMPANY_SEARCH", names.join(", "), { companies: names });
   }
-  const recentSearches = await listRecentSearches(userId, 6);
+  const [recentSearches, postingCount, sourceCount] = await Promise.all([listRecentSearches(userId, 6), db.jobPosting.count(), db.jobSource.count()]);
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-3xl font-semibold">Companies</h1>
+      <Reveal>
+        <PageHero
+          eyebrow="Employer lookup"
+          title="Companies"
+          description="Name the employers you care about and see every open role we hold for them, scored against your search where a match exists."
+          stats={[
+            { label: "Postings indexed", value: postingCount },
+            { label: "Sources read daily", value: sourceCount, tone: "accent" },
+            { label: "Your recent lookups", value: recentSearches.length, tone: "secondary" },
+          ]}
+        />
+      </Reveal>
       <CompanySearch query={query} groups={groups} afterForm={<RecentSearchesCard searches={recentSearches} compact />} />
     </div>
   );

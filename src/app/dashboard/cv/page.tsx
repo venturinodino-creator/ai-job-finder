@@ -7,12 +7,20 @@ import { SetActiveCvButton } from "@/components/SetActiveCvButton";
 import { SignalBar } from "@/components/SignalBar";
 import { ScoringBanner } from "@/components/ScoringRun";
 import { isScoringRunning } from "@/lib/scoringRun";
+import { PageHero } from "@/components/PageHero";
+import { Reveal } from "@/components/Reveal";
 
 const VERDICT_LABEL: Record<string, { text: string; tone: "secondary" | "accent" }> = {
   STRONG: { text: "Strong", tone: "secondary" },
   GOOD: { text: "Good", tone: "secondary" },
   NEEDS_WORK: { text: "Needs work", tone: "accent" },
   WEAK: { text: "Weak", tone: "accent" },
+};
+
+const SEVERITY_COLOR: Record<string, string> = {
+  HIGH: "var(--color-danger)",
+  MEDIUM: "var(--color-gamify)",
+  LOW: "var(--color-accent)",
 };
 
 export default async function CvPage() {
@@ -28,16 +36,37 @@ export default async function CvPage() {
   type CvWithReview = (typeof cvs)[number];
   type Issue = CvWithReview["reviews"][number]["issues"][number];
 
+  // The hero reads the CV the search uses, falling back to the newest one.
+  const headlineCv = cvs.find((c: CvWithReview) => c.id === profile?.activeCvId) ?? cvs[0] ?? null;
+  const headlineReview = headlineCv?.reviews[0] ?? null;
+  const headlineVerdict = headlineReview ? VERDICT_LABEL[headlineReview.verdict] : null;
+  const highIssues = headlineReview ? headlineReview.issues.filter((i: Issue) => i.severity === "HIGH").length : 0;
+
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <p className="eyebrow">CV intelligence</p>
-        <h1 className="font-display text-3xl font-semibold">Your CV</h1>
-        <p className="text-sm max-w-xl" style={{ color: "var(--color-text-muted)" }}>
-          PDF, DOCX or plain text, up to 10MB. We rate it and give concrete fixes right after upload.
-        </p>
-        <CvUploadForm />
-      </div>
+      <Reveal>
+        <PageHero
+          eyebrow="CV intelligence"
+          title="Your CV"
+          description="PDF, DOCX or plain text, up to 10MB. We rate it and give concrete fixes right after upload."
+          stats={
+            headlineReview
+              ? [
+                  { label: "CVs uploaded", value: cvs.length },
+                  { label: "Fixes suggested", value: headlineReview.issues.length, tone: "accent" },
+                  { label: "High severity", value: highIssues, tone: highIssues > 0 ? "gamify" : "secondary" },
+                ]
+              : undefined
+          }
+          ring={
+            headlineReview
+              ? { value: headlineReview.overallScore, label: `CV score ${headlineReview.overallScore} of 100`, caption: headlineVerdict?.text ?? "Score", text: String(Math.round(headlineReview.overallScore)) }
+              : undefined
+          }
+        >
+          <CvUploadForm />
+        </PageHero>
+      </Reveal>
 
       {/* Attaching a CV re-scores the search; say so from the server's state, so the page still shows it after a refresh. */}
       {isScoringRunning(profile?.scoringStartedAt ?? null) && <ScoringBanner hasScores={false} />}
@@ -106,10 +135,13 @@ export default async function CvPage() {
                       <p className="text-sm font-medium">Fixes</p>
                       <ul className="text-sm space-y-2">
                         {review.issues.map((issue: Issue) => (
-                          <li key={issue.id} className="border-l-2 pl-3" style={{ borderColor: "var(--color-accent)" }}>
-                            <span className="font-medium">
-                              [{issue.category.replace(/_/g, " ")} · {issue.severity}]
-                            </span>{" "}
+                          <li key={issue.id} className="border-l-4 pl-3" style={{ borderColor: SEVERITY_COLOR[issue.severity] ?? "var(--color-accent)" }}>
+                            <span
+                              className="font-data mr-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                              style={{ background: `color-mix(in srgb, ${SEVERITY_COLOR[issue.severity] ?? "var(--color-accent)"} 14%, transparent)`, color: SEVERITY_COLOR[issue.severity] }}
+                            >
+                              {issue.severity.toLowerCase()} · {issue.category.replace(/_/g, " ").toLowerCase()}
+                            </span>
                             {issue.description}
                             <br />
                             <span style={{ color: "var(--color-text-muted)" }}>→ {issue.suggestion}</span>

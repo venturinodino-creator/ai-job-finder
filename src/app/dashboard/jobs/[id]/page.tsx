@@ -15,6 +15,8 @@ import { ApplyPanel, type ApplicationView } from "@/components/ApplyPanel";
 import { TailorChanges, type TailorSuggestion, type EditReport } from "@/components/TailorChanges";
 import { isEmailConfigured } from "@/lib/email";
 import { describeAttachment } from "@/lib/applications";
+import { PageHero } from "@/components/PageHero";
+import { Reveal } from "@/components/Reveal";
 import type { JobSummary } from "@/agents/jobSummary";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -66,23 +68,42 @@ export default async function JobDetailPage({ params, searchParams }: { params: 
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <Link href={back.href} className="inline-block text-sm underline" style={{ color: "var(--color-text-muted)" }}>
-          ← {back.label}
-        </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-display text-2xl font-semibold">{job.title}</h1>
-          <PostingTags
-            reading={{ applied: applied !== null, isWildcard: reading?.isWildcard ?? false, locationMismatch: reading?.locationMismatch ?? false }}
-          />
-        </div>
-        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-          {meta.join(" · ")}
-        </p>
-        <a href={job.url} target="_blank" rel="noreferrer" className="inline-block text-sm underline">
-          View original posting
-        </a>
-      </header>
+      <Reveal>
+        <PageHero
+          eyebrow={`Posting · from ${back.label}`}
+          leading={
+            <span
+              aria-hidden
+              className="font-display flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-2xl font-semibold"
+              style={{ background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.28)" }}
+            >
+              {job.company.trim().charAt(0).toUpperCase() || "?"}
+            </span>
+          }
+          title={
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span className="text-2xl sm:text-3xl">{job.title}</span>
+              <span className="flex flex-wrap gap-2 text-base">
+                <PostingTags
+                  reading={{ applied: applied !== null, isWildcard: reading?.isWildcard ?? false, locationMismatch: reading?.locationMismatch ?? false }}
+                />
+              </span>
+            </span>
+          }
+          description={meta.join(" · ")}
+          actions={
+            <>
+              <a href={job.url} target="_blank" rel="noreferrer" className="hero-cta">
+                View original posting <span aria-hidden>↗</span>
+              </a>
+              <Link href={back.href} className="hero-link">
+                ← {back.label}
+              </Link>
+            </>
+          }
+          ring={reading ? { value: reading.score, label: `Match score ${Math.round(reading.score)}%`, caption: reading.isWildcard ? "Wildcard" : "Match" } : undefined}
+        />
+      </Reveal>
 
       {/* Desktop: the work on the left, the reading and the steps in a rail that stays in view.
           Phone: one column in the order reading, posting, steps. */}

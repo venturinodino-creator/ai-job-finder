@@ -6,6 +6,8 @@ import { parseArchivedResults } from "@/lib/archivedResults";
 import { RestoreSearchButton } from "@/components/RestoreSearchButton";
 import { PostingCard } from "@/components/PostingCard";
 import { postingFromArchivedResult } from "@/lib/posting";
+import { PageHero } from "@/components/PageHero";
+import { Reveal } from "@/components/Reveal";
 
 /**
  * The archive: every previous search, newest first. Profile searches keep
@@ -24,14 +26,18 @@ export default async function ArchivePage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="eyebrow">History</p>
-        <h1 className="font-display text-3xl font-semibold mt-1">Search archive</h1>
-        <p className="text-sm max-w-2xl mt-2" style={{ color: "var(--color-text-muted)" }}>
-          Every time you change your search profile, the search it replaces is filed here together with the
-          matches the feed showed for it. Company lookups are kept too, so you can re-run them.
-        </p>
-      </div>
+      <Reveal>
+        <PageHero
+          eyebrow="History"
+          title="Search archive"
+          description="Every time you change your search profile, the search it replaces is filed here together with the matches the feed showed for it. Company lookups are kept too, so you can re-run them."
+          stats={[
+            { label: "Searches filed", value: profileEntries.length },
+            { label: "Company lookups", value: companyEntries.length, tone: "accent" },
+            { label: "Matches kept", value: profileEntries.reduce((n, e) => n + e.resultCount, 0), tone: "secondary" },
+          ]}
+        />
+      </Reveal>
 
       <section className="space-y-4">
         <h2 className="font-display text-lg font-semibold">Previous search profiles ({profileEntries.length})</h2>

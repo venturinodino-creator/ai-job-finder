@@ -12,12 +12,15 @@ export function OverviewHero({
   roles,
   scoredCaption,
   complete,
+  greeting,
 }: {
   pipeline: PipelineCounts;
   roles: string[];
   /** e.g. "Last scored 3 h ago"; omitted before the first run. */
   scoredCaption?: string;
   complete: boolean;
+  /** e.g. "Good afternoon, Dino"; replaces the plain eyebrow. */
+  greeting?: string;
 }) {
   const { scored, strong } = pipeline;
   const share = scored === 0 ? 0 : Math.round((strong / scored) * 100);
@@ -27,7 +30,7 @@ export function OverviewHero({
       <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-4">
           <div>
-            <p className="eyebrow">{complete ? "Current search" : "Getting started"}</p>
+            <p className="eyebrow">{greeting ?? (complete ? "Current search" : "Getting started")}</p>
             <h1 className="font-display mt-1 text-3xl font-semibold sm:text-4xl">
               {complete ? (
                 <>

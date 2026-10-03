@@ -1,54 +1,73 @@
 import { requireDashboardUserId } from "@/lib/auth";
 import { getGamificationSummary } from "@/lib/gamification";
-import { SignalBar } from "@/components/SignalBar";
+import { PageHero } from "@/components/PageHero";
+import { Reveal } from "@/components/Reveal";
 
 export default async function AchievementsPage() {
   const userId = await requireDashboardUserId();
   const summary = await getGamificationSummary(userId);
   const unlockedCount = summary.achievements.filter((a) => a.unlocked).length;
+  const toNext = Math.max(0, summary.pointsForNextLevel - summary.pointsIntoLevel);
+  const levelPct = summary.pointsForNextLevel > 0 ? (summary.pointsIntoLevel / summary.pointsForNextLevel) * 100 : 0;
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="eyebrow">Field record</p>
-        <h1 className="font-display text-3xl font-semibold mt-1">Achievements</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-          {unlockedCount} of {summary.achievements.length} unlocked · Level {summary.level} · {summary.points} points
-        </p>
-      </div>
-
-      <SignalBar
-        value={summary.pointsIntoLevel}
-        max={summary.pointsForNextLevel}
-        tone="gamify"
-        label={`${summary.pointsIntoLevel} of ${summary.pointsForNextLevel} points to level ${summary.level + 1}`}
-      />
+      <Reveal>
+        <PageHero
+          eyebrow="Field record"
+          title="Achievements"
+          description={`${toNext} ${toNext === 1 ? "point" : "points"} to level ${summary.level + 1}. Every step of the search earns points: scoring, opening, tailoring, applying.`}
+          stats={[
+            { label: "Unlocked", value: `${unlockedCount}/${summary.achievements.length}`, tone: "gamify" },
+            { label: "Points", value: summary.points },
+            { label: "Streak", value: summary.currentStreak, tone: "secondary", hint: `best ${summary.longestStreak} days` },
+          ]}
+          ring={{
+            value: levelPct,
+            label: `${summary.pointsIntoLevel} of ${summary.pointsForNextLevel} points to level ${summary.level + 1}`,
+            caption: "Next level",
+            text: `Lv ${summary.level}`,
+          }}
+        />
+      </Reveal>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {summary.achievements.map((a) => (
-          <div
-            key={a.key}
-            className="card flex items-start gap-3"
-            style={{ opacity: a.unlocked ? 1 : 0.5 }}
-          >
-            <span className="text-2xl" aria-hidden>
-              {a.icon}
-            </span>
-            <div>
-              <p className="font-medium text-sm">{a.name}</p>
-              <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-                {a.description}
-              </p>
-              <p
-                className="font-data text-xs mt-1 font-medium"
-                style={{ color: a.unlocked ? "var(--color-gamify)" : "var(--color-text-muted)" }}
+        {summary.achievements.map((a, i) => (
+          <Reveal key={a.key} index={i}>
+            <div
+              className="card flex h-full items-start gap-3"
+              style={
+                a.unlocked
+                  ? {
+                      background: "linear-gradient(135deg, var(--color-gamify-soft), var(--color-bg-elevated) 70%)",
+                      borderColor: "color-mix(in srgb, var(--color-gamify) 35%, var(--color-border))",
+                      boxShadow: "var(--shadow-card)",
+                    }
+                  : { opacity: 0.6 }
+              }
+            >
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl"
+                aria-hidden
+                style={{
+                  background: a.unlocked ? "var(--color-gamify-soft)" : "var(--color-bg)",
+                  border: `1px solid ${a.unlocked ? "var(--color-gamify)" : "var(--color-border)"}`,
+                  filter: a.unlocked ? undefined : "grayscale(1)",
+                }}
               >
-                {a.unlocked
-                  ? `Unlocked ${new Date(a.unlockedAt!).toLocaleDateString()}`
-                  : `+${a.points} pts when unlocked`}
-              </p>
+                {a.icon}
+              </span>
+              <div className="min-w-0">
+                <p className="font-medium text-sm">{a.name}</p>
+                <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                  {a.description}
+                </p>
+                <p className="font-data text-xs mt-1 font-medium" style={{ color: a.unlocked ? "var(--color-gamify)" : "var(--color-text-muted)" }}>
+                  {a.unlocked ? `Unlocked ${new Date(a.unlockedAt!).toLocaleDateString()}` : `+${a.points} pts when unlocked`}
+                </p>
+              </div>
             </div>
-          </div>
+          </Reveal>
         ))}
       </div>
     </div>

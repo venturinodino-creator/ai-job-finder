@@ -64,7 +64,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-md bg-black text-white dark:bg-white dark:text-black px-4 py-2 font-medium disabled:opacity-50"
+        className="btn-primary w-full"
       >
         {loading ? "Please wait..." : mode === "login" ? "Log in" : "Create account"}
       </button>

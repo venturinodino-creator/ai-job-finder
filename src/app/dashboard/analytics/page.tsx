@@ -1,66 +1,67 @@
 import { requireDashboardUserId } from "@/lib/auth";
 import { getAnalyticsSummary } from "@/lib/analytics";
 import { CvScoreHistoryChart, ScoreDistributionChart, SourceBreakdownChart } from "@/components/AnalyticsCharts";
+import { PageHero } from "@/components/PageHero";
+import { Reveal } from "@/components/Reveal";
 
 export default async function AnalyticsPage() {
   const userId = await requireDashboardUserId();
   const summary = await getAnalyticsSummary(userId);
   const { totalMatches, viewed, applied } = summary.jobsFunnel;
+  const pct = (n: number) => (totalMatches > 0 ? Math.round((n / totalMatches) * 100) : 0);
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="eyebrow">Your search, measured</p>
-        <h1 className="font-display text-3xl font-semibold mt-1">Analytics</h1>
-      </div>
-
-      <div className="grid sm:grid-cols-3 gap-4">
-        <StatTile label="Total matches" value={totalMatches} />
-        <StatTile label="Jobs viewed" value={viewed} sub={totalMatches > 0 ? `${Math.round((viewed / totalMatches) * 100)}%` : undefined} />
-        <StatTile label="Jobs applied" value={applied} sub={totalMatches > 0 ? `${Math.round((applied / totalMatches) * 100)}%` : undefined} />
-      </div>
+      <Reveal>
+        <PageHero
+          eyebrow="Your search, measured"
+          title="Analytics"
+          description={
+            totalMatches === 0
+              ? "Once your first matches are scored, this page shows how you are working through them."
+              : `You have read ${viewed} of ${totalMatches} matches and applied to ${applied}. The charts below show where the best roles come from.`
+          }
+          stats={[
+            { label: "Total matches", value: totalMatches },
+            { label: "Jobs viewed", value: viewed, tone: "accent", hint: totalMatches > 0 ? `${pct(viewed)}% of matches` : undefined },
+            { label: "Jobs applied", value: applied, tone: "secondary", hint: totalMatches > 0 ? `${pct(applied)}% of matches` : undefined },
+          ]}
+          ring={totalMatches > 0 ? { value: pct(viewed), label: `${pct(viewed)}% of matches viewed`, caption: "Viewed" } : undefined}
+        />
+      </Reveal>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h2 className="font-display text-lg font-semibold mb-1">CV score over time</h2>
-          <p className="text-sm mb-2" style={{ color: "var(--color-text-muted)" }}>
-            Every review you&apos;ve run, in order.
-          </p>
-          <CvScoreHistoryChart data={summary.cvScoreHistory} />
-        </div>
+        <Reveal index={1}>
+          <ChartCard title="CV score over time" note="Every review you've run, in order.">
+            <CvScoreHistoryChart data={summary.cvScoreHistory} />
+          </ChartCard>
+        </Reveal>
 
-        <div className="card">
-          <h2 className="font-display text-lg font-semibold mb-1">Match score distribution</h2>
-          <p className="text-sm mb-2" style={{ color: "var(--color-text-muted)" }}>
-            How your matches spread across the scoring range.
-          </p>
-          <ScoreDistributionChart data={summary.scoreDistribution} />
-        </div>
+        <Reveal index={2}>
+          <ChartCard title="Match score distribution" note="How your matches spread across the scoring range.">
+            <ScoreDistributionChart data={summary.scoreDistribution} />
+          </ChartCard>
+        </Reveal>
 
-        <div className="card lg:col-span-2">
-          <h2 className="font-display text-lg font-semibold mb-1">Matches by source</h2>
-          <p className="text-sm mb-2" style={{ color: "var(--color-text-muted)" }}>
-            Which job boards are surfacing your best-fit roles.
-          </p>
-          <SourceBreakdownChart data={summary.sourceBreakdown} />
-        </div>
+        <Reveal index={3} className="lg:col-span-2">
+          <ChartCard title="Matches by source" note="Which job boards are surfacing your best-fit roles.">
+            <SourceBreakdownChart data={summary.sourceBreakdown} />
+          </ChartCard>
+        </Reveal>
       </div>
     </div>
   );
 }
 
-function StatTile({ label, value, sub }: { label: string; value: number; sub?: string }) {
+/** A chart panel with a coloured top edge, matching the stage tiles on the Overview. */
+function ChartCard({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
   return (
-    <div className="card">
-      <p className="eyebrow">{label}</p>
-      <div className="flex items-baseline gap-2 mt-1">
-        <p className="font-data text-3xl font-semibold">{value}</p>
-        {sub && (
-          <span className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-            {sub}
-          </span>
-        )}
-      </div>
+    <div className="card h-full" style={{ borderTop: "3px solid var(--color-accent)", boxShadow: "var(--shadow-card)" }}>
+      <h2 className="font-display text-lg font-semibold mb-1">{title}</h2>
+      <p className="text-sm mb-2" style={{ color: "var(--color-text-muted)" }}>
+        {note}
+      </p>
+      {children}
     </div>
   );
 }

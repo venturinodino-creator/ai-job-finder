@@ -239,6 +239,14 @@ body {
   .hero-link:hover {
     background: rgba(255, 255, 255, 0.1);
   }
+  .hero .btn-primary {
+    background: #ffffff;
+    color: #0f2a5c;
+    font-weight: 600;
+  }
+  .hero p[style*="--color-danger"] {
+    color: #ffb4ab !important;
+  }
   .hero-stat {
     border-radius: 0.5rem;
     padding: 0.75rem 0.875rem;

@@ -14,11 +14,13 @@ import { Reveal } from "@/components/Reveal";
 import { IngestSourcesPanel } from "@/components/IngestSourcesPanel";
 import { buildSourceStatus } from "@/lib/sourceStatus";
 import { jobSourceAdapters } from "@/agents/sources";
+import { greetingFor } from "@/lib/greeting";
 
 export default async function DashboardPage() {
   const userId = await requireDashboardUserId();
 
-  const [state, gamification, sourceRows] = await Promise.all([
+  const [user, state, gamification, sourceRows] = await Promise.all([
+    db.user.findUnique({ where: { id: userId }, select: { name: true, timezone: true } }),
     searchState(userId),
     getGamificationSummary(userId),
     db.jobSource.findMany({
@@ -31,12 +33,13 @@ export default async function DashboardPage() {
     sourceRows.map((r) => ({ key: r.key, enabled: r.enabled, lastFetchedAt: r.lastFetchedAt, lastError: r.lastError, postings: r._count.postings })),
   );
 
+  const greeting = greetingFor(user?.name, user?.timezone);
   const scoredCaption = lastScoredAt ? `last scored ${formatRelative(lastScoredAt)}` : undefined;
 
   return (
     <div className="space-y-8">
       <Reveal>
-        <OverviewHero pipeline={pipeline} roles={profile?.targetRoles ?? []} scoredCaption={scoredCaption} complete={setup.complete} />
+        <OverviewHero pipeline={pipeline} roles={profile?.targetRoles ?? []} scoredCaption={scoredCaption} complete={setup.complete} greeting={greeting} />
       </Reveal>
 
       {/* Until the first matches exist, the checklist stands in for the numbers. */}
