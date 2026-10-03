@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { ApiError, handle, requireUserId } from "@/lib/api";
+import { ApiError, allowanceError, handle, requireUserId } from "@/lib/api";
+import { AllowanceExceededError } from "@/lib/entitlements";
 import { ScoringBusyError, runDigestForUser } from "@/agents/digest";
 
 // Lets a logged-in user pull a fresh match run on demand, instead of waiting
@@ -19,6 +20,8 @@ export async function POST() {
     } catch (err) {
       // A run is already writing this search's scores: tell the caller, don't race it.
       if (err instanceof ScoringBusyError) throw new ApiError(409, err.message);
+      // The Free allowance is spent: say what was used and when the next run opens.
+      if (err instanceof AllowanceExceededError) throw allowanceError(err.refusal);
       throw err;
     }
   });

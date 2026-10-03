@@ -1,5 +1,6 @@
 "use client";
 
+import { errorFromResponse } from "@/lib/allowanceClient";
 import { SaveSearchStatus, useSaveSearch } from "@/components/ScoringRun";
 
 /**
@@ -23,7 +24,7 @@ export function SetActiveCvButton({ profileId, cvId }: { profileId: string; cvId
               body: JSON.stringify({ activeCvId: cvId }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error ?? "Could not use this CV for your search.");
+            if (!res.ok) throw errorFromResponse(data, "Could not use this CV for your search.");
             return { rescore: Boolean(data.rescore) };
           })
         }

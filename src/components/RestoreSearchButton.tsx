@@ -1,5 +1,6 @@
 "use client";
 
+import { errorFromResponse } from "@/lib/allowanceClient";
 import { SaveSearchStatus, useSaveSearch } from "@/components/ScoringRun";
 
 /**
@@ -22,7 +23,7 @@ export function RestoreSearchButton({ profileId, snapshot }: { profileId: string
         body: JSON.stringify(criteria),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to restore search.");
+      if (!res.ok) throw errorFromResponse(data, "Failed to restore search.");
       return { rescore: Boolean(data.rescore) };
     });
 

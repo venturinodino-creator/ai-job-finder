@@ -11,6 +11,8 @@ import { postingFromMatch } from "@/lib/posting";
 import type { PostingOrigin } from "@/lib/postingOrigin";
 import { PIPELINE_STAGE_LABELS, STRONG_MATCH_MIN, parseStage, searchState, type MatchWithJob } from "@/lib/searchState";
 import { formatRelative } from "@/lib/formatRelative";
+import { UsageMeter } from "@/components/UsageMeter";
+import { usageSummary } from "@/lib/entitlements";
 
 type SearchParams = Promise<{ companies?: string | string[]; stage?: string | string[] }>;
 
@@ -24,8 +26,9 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   }
   // An unknown stage value is simply the unfiltered view.
   const stage = parseStage(rawStage);
-  const state = await searchState(userId, { stage });
+  const [state, allowances] = await Promise.all([searchState(userId, { stage }), usageSummary(userId)]);
   const { profile } = state;
+  const scoringAllowance = allowances.find((a) => a.action === "SCORING_RUN");
 
   if (!profile) {
     return (
@@ -112,6 +115,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
             caption={lastRun ? `Last scored ${formatRelative(lastRun)} · ${profile.targetRoles.join(", ") || "no target roles set"}` : ""}
             action={<RefreshMatchesButton onHero />}
           />
+          {scoringAllowance && (
+            <div className="mt-4">
+              <UsageMeter status={scoringAllowance} label="Scoring runs" />
+            </div>
+          )}
         </Reveal>
       ) : scoring.running ? null : (
         <div className="card" style={{ borderStyle: "dashed" }}>

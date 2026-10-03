@@ -32,6 +32,7 @@ model User {
   activityEvents ActivityEvent[]
   applications   Application[]
   searchHistory  SearchHistory[]
+  usage          UsageRecord[]
 
   @@map("users")
 }
@@ -486,6 +487,28 @@ enum ActivityType {
 // Every point-earning action, in order. Powers both the gamification engine
 // (points/streak/achievement checks all read from this) and the analytics
 // page's activity history — one log, two views.
+// The costly things a plan allows a number of per period (src/lib/entitlements.ts).
+enum CostlyAction {
+  SCORING_RUN
+  CV_REVIEW
+  CV_TAILORING
+}
+
+// One row each time a user spends a costly action. Allowances are counted from
+// these rows, so a row's createdAt is when the unit was spent; a failed action
+// gives its unit back by deleting its row.
+model UsageRecord {
+  id     String       @id @default(cuid())
+  userId String
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action CostlyAction
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, action, createdAt])
+  @@map("usage_records")
+}
+
 model ActivityEvent {
   id     String @id @default(cuid())
   userId String

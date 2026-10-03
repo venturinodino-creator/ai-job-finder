@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { db } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 import { withScoringRun } from "@/lib/scoringRun";
+import { AllowanceExceededError, consume, release } from "@/lib/entitlements";
 import { runMatchForProfile } from "./match";
 
 const MAIN_ENTRIES_PER_DIGEST = 10;
@@ -19,17 +20,35 @@ export class ScoringBusyError extends Error {
  * digest. A search whose run is already in flight (another tab, the nightly
  * job) is left to that run; when that is true of all of them this throws
  * ScoringBusyError instead of racing it.
+ *
+ * A run the user asks for spends one unit of their scoring allowance and
+ * throws AllowanceExceededError, before anything is scored, when none is
+ * left; the unit comes back if the run fails or finds the search busy. The
+ * scheduled nightly run is not counted for now: it becomes Pro-only when
+ * Pro exists, and until then every user is on Free.
  */
-export async function runDigestForUser(userId: string) {
+export async function runDigestForUser(userId: string, options: { scheduled?: boolean } = {}) {
   const profiles = await db.searchProfile.findMany({ where: { userId, isActive: true } });
   if (profiles.length === 0) return null;
 
-  let ran = 0;
-  for (const profile of profiles) {
-    const outcome = await withScoringRun(profile.id, () => runMatchForProfile(profile.id));
-    if (outcome.ran) ran += 1;
+  let usageId: string | null = null;
+  if (!options.scheduled) {
+    const spent = await consume(userId, "SCORING_RUN");
+    if (!spent.allowed) throw new AllowanceExceededError(spent);
+    usageId = spent.usageId;
   }
-  if (ran === 0) throw new ScoringBusyError();
+
+  let ran = 0;
+  try {
+    for (const profile of profiles) {
+      const outcome = await withScoringRun(profile.id, () => runMatchForProfile(profile.id));
+      if (outcome.ran) ran += 1;
+    }
+    if (ran === 0) throw new ScoringBusyError();
+  } catch (err) {
+    if (usageId) await release(usageId);
+    throw err;
+  }
 
   const today = startOfToday();
   const digest = await db.dailyDigest.upsert({
@@ -89,7 +108,7 @@ export async function runDigestAll() {
   const results = [];
   for (const user of users) {
     try {
-      results.push(await runDigestForUser(user.id));
+      results.push(await runDigestForUser(user.id, { scheduled: true }));
     } catch (err) {
       if (err instanceof ScoringBusyError) continue; // being scored by another run already
       throw err;

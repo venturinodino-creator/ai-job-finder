@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { ApiError } from "@/lib/api";
+import { ApiError, allowanceError } from "@/lib/api";
+import { check } from "@/lib/entitlements";
 import { recordActivity } from "@/lib/gamification";
 import { describeSnapshot, profileSnapshot, snapshotsDiffer } from "@/lib/profileSnapshot";
 import { recordSearch } from "@/lib/searchHistory";
@@ -77,6 +78,16 @@ export async function updateSearchProfile(userId: string, profileId: string, fie
 
   const data = normalise(fields);
   if (data.targetRoles !== undefined) requireRole(data.targetRoles);
+
+  // A change the matcher would look at needs a new scoring run, and the save drops the
+  // scores it replaces. Without a run to follow it the user would be left with an empty
+  // feed, so a save the allowance cannot follow is refused before it replaces anything.
+  const merged: Record<string, unknown> = { ...before };
+  for (const [key, value] of Object.entries(data)) if (value !== undefined) merged[key] = value;
+  if (snapshotsDiffer(profileSnapshot(before), profileSnapshot(merged as Parameters<typeof profileSnapshot>[0]))) {
+    const peek = await check(userId, "SCORING_RUN");
+    if (!peek.allowed) throw allowanceError(peek, "This change needs a new scoring run, so it was not saved. ");
+  }
 
   const profile = await db.searchProfile.update({ where: { id: profileId }, data });
 

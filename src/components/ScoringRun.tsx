@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { retryScoring, runSaveSearch, type SavePhase } from "@/lib/saveSearchFlow";
+import { AllowanceRefusedError, errorFromResponse } from "@/lib/allowanceClient";
+import { UpgradeLink } from "@/components/UpgradeLink";
 
 /** What a scoring run usually takes, said the same way everywhere. */
 export const SCORING_DURATION = "This usually takes 1–3 minutes; keep this page open.";
@@ -17,7 +19,7 @@ export async function requestScoringRun(): Promise<void> {
   if (res.status === 409) return;
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error ?? `Scoring failed (HTTP ${res.status}).`);
+    throw errorFromResponse(data, `Scoring failed (HTTP ${res.status}).`);
   }
 }
 
@@ -73,6 +75,23 @@ export function useSaveSearch(destination = "/dashboard/jobs") {
   const router = useRouter();
   const [phase, setPhase] = useState<SavePhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Set when the plan's allowance is what stopped the save or the run: the Upgrade button leads from here.
+  const [upgradeHref, setUpgradeHref] = useState<string | null>(null);
+
+  const track = useCallback(
+    <T,>(work: () => Promise<T>) =>
+      async () => {
+        try {
+          const value = await work();
+          setUpgradeHref(null);
+          return value;
+        } catch (err) {
+          setUpgradeHref(err instanceof AllowanceRefusedError ? err.upgradeHref : null);
+          throw err;
+        }
+      },
+    [],
+  );
 
   const onPhase = useCallback((next: SavePhase, message?: string) => {
     setPhase(next);
@@ -88,12 +107,12 @@ export function useSaveSearch(destination = "/dashboard/jobs") {
   );
 
   const save = useCallback(
-    (doSave: () => Promise<{ rescore: boolean; land?: string }>) => runSaveSearch({ save: doSave, score: requestScoringRun, onPhase, onDone }),
-    [onPhase, onDone],
+    (doSave: () => Promise<{ rescore: boolean; land?: string }>) => runSaveSearch({ save: track(doSave), score: track(requestScoringRun), onPhase, onDone }),
+    [track, onPhase, onDone],
   );
-  const retry = useCallback(() => retryScoring({ score: requestScoringRun, onPhase, onDone }), [onPhase, onDone]);
+  const retry = useCallback(() => retryScoring({ score: track(requestScoringRun), onPhase, onDone }), [track, onPhase, onDone]);
 
-  return { phase, error, busy: phase === "saving" || phase === "scoring", save, retry };
+  return { phase, error, upgradeHref, busy: phase === "saving" || phase === "scoring", save, retry };
 }
 
 /** What the flow shows beneath a save control: progress while scoring, the error and a retry when scoring failed. */
@@ -116,17 +135,23 @@ export function SaveSearchStatus({ flow, savedNote }: { flow: ReturnType<typeof 
         <p className="text-sm" style={{ color: "var(--color-danger)" }}>
           Re-scoring failed: {flow.error}
         </p>
-        <button type="button" className="btn-primary text-sm" onClick={() => void flow.retry()}>
-          Retry scoring
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {flow.upgradeHref && <UpgradeLink href={flow.upgradeHref} />}
+          <button type="button" className={flow.upgradeHref ? "btn-secondary text-sm" : "btn-primary text-sm"} onClick={() => void flow.retry()}>
+            Retry scoring
+          </button>
+        </div>
       </div>
     );
   }
   if (flow.error) {
     return (
-      <p className="text-sm" role="alert" style={{ color: "var(--color-danger)" }}>
-        {flow.error}
-      </p>
+      <div className="space-y-2" role="alert">
+        <p className="text-sm" style={{ color: "var(--color-danger)" }}>
+          {flow.error}
+        </p>
+        {flow.upgradeHref && <UpgradeLink href={flow.upgradeHref} />}
+      </div>
     );
   }
   return null;
