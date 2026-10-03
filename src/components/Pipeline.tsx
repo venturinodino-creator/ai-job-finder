@@ -7,19 +7,23 @@ import { PIPELINE_STAGE_LABELS, stageHref, type PipelineCounts, type PipelineSta
 
 const SEGMENTS = 12;
 
-type Tone = "text" | "accent" | "secondary";
+type Tone = "text" | "accent" | "secondary" | "gamify";
 const TONE: Record<Tone, string> = {
   text: "var(--color-text)",
   accent: "var(--color-accent)",
   secondary: "var(--color-secondary)",
+  gamify: "var(--color-gamify)",
 };
 
-const STEPS: { key: PipelineStage; tone: Tone; hint: string }[] = [
-  { key: "scored", tone: "text", hint: "postings scored against your profile and CV" },
-  { key: "strong", tone: "secondary", hint: "scoring 60% or higher" },
-  { key: "opened", tone: "accent", hint: "postings you have read" },
-  { key: "prepared", tone: "accent", hint: "a tailored CV or an application draft exists" },
-  { key: "applied", tone: "secondary", hint: "marked applied or sent by email" },
+// Each step has its own colour so the funnel reads left to right as it deepens:
+// graphite for everything scored, green for strong, blue while you work on it,
+// amber for prepared, green again for the finish.
+const STEPS: { key: PipelineStage; tone: Tone; hint: string; icon: React.ReactNode }[] = [
+  { key: "scored", tone: "text", hint: "postings scored against your profile and CV", icon: <path d="M4 19V9m6 10V5m6 14v-7m6 7H2" /> },
+  { key: "strong", tone: "secondary", hint: "scoring 60% or higher", icon: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" /> },
+  { key: "opened", tone: "accent", hint: "postings you have read", icon: <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></> },
+  { key: "prepared", tone: "gamify", hint: "a tailored CV or an application draft exists", icon: <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zm0 0v5h5M9 13h6m-6 4h4" /> },
+  { key: "applied", tone: "secondary", hint: "marked applied or sent by email", icon: <path d="m22 2-11 11M22 2l-7 20-4-9-9-4z" /> },
 ];
 
 /**
@@ -44,8 +48,8 @@ export function Pipeline({
   const total = counts.scored;
 
   return (
-    <section className="card space-y-4" aria-label="Search pipeline" style={{ boxShadow: "var(--shadow-card)" }}>
-      <ol className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 md:grid-cols-5">
+    <section className="space-y-3" aria-label="Search pipeline">
+      <ol className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         {STEPS.map((step, i) => {
           const value = counts[step.key];
           const share = total === 0 ? 0 : value / total;
@@ -54,11 +58,18 @@ export function Pipeline({
           const accessible = `${label}: ${value}${i > 0 ? ` of ${total} scored` : ""}`;
           const body = (
             <>
-              <p className="eyebrow truncate">{label}</p>
-              <p className="font-data mt-1 text-3xl font-semibold leading-none tabular-nums" style={{ color: TONE[step.tone] }}>
+              <div className="relative flex min-h-10 items-start justify-between gap-2">
+                <p className="eyebrow min-w-0 pt-1 leading-tight">{label}</p>
+                <span className="stage-icon" aria-hidden>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    {step.icon}
+                  </svg>
+                </span>
+              </div>
+              <p className="font-data relative mt-2 text-3xl font-semibold leading-none tabular-nums" style={{ color: TONE[step.tone] }}>
                 <CountUp value={value} instant={!!reduceMotion} />
               </p>
-              <div className="mt-2 flex items-end gap-[2px]" aria-hidden>
+              <div className="relative mt-3 flex items-end gap-[2px]" aria-hidden>
                 {Array.from({ length: SEGMENTS }).map((_, s) => (
                   <span
                     key={s}
@@ -70,26 +81,20 @@ export function Pipeline({
                   />
                 ))}
               </div>
-              {i > 0 && value > 0 && (
-                <p className="font-data mt-1 text-[11px]" style={{ color: "var(--color-text-muted)" }}>
-                  {Math.round(share * 100)}% of scored
-                </p>
-              )}
+              <p className="font-data relative mt-1.5 h-4 text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+                {i > 0 && value > 0 ? `${Math.round(share * 100)}% of scored` : ""}
+              </p>
             </>
           );
+          const tile = { "--tile-color": TONE[step.tone] } as React.CSSProperties;
           return (
-            <li key={step.key} className="relative min-w-0" title={step.hint}>
-              {i > 0 && (
-                <span aria-hidden className="absolute -left-3 top-7 hidden text-xs md:block" style={{ color: "var(--color-border)" }}>
-                  ›
-                </span>
-              )}
+            <li key={step.key} className="min-w-0" title={step.hint}>
               {linkBase ? (
-                <Link href={stageHref(linkBase, step.key)} aria-label={`${accessible}. Open in Matches`} className="pipeline-step block rounded-md">
+                <Link href={stageHref(linkBase, step.key)} aria-label={`${accessible}. Open in Matches`} className="stage-tile block" style={tile}>
                   {body}
                 </Link>
               ) : (
-                <div role="group" aria-label={accessible}>
+                <div role="group" aria-label={accessible} className="stage-tile" style={tile}>
                   {body}
                 </div>
               )}

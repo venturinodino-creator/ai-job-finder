@@ -12,7 +12,10 @@ export function ProgressStrip({ summary }: { summary: GamificationSummary }) {
   return (
     <div
       className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg px-4 py-2.5 text-sm"
-      style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)" }}
+      style={{
+        background: "linear-gradient(90deg, var(--color-gamify-soft), var(--color-bg-elevated) 55%)",
+        border: "1px solid color-mix(in srgb, var(--color-gamify) 28%, var(--color-border))",
+      }}
       aria-label="Your progress"
       role="group"
     >
@@ -24,7 +27,10 @@ export function ProgressStrip({ summary }: { summary: GamificationSummary }) {
         </span>
       </span>
       <span className="flex min-w-0 flex-1 items-center gap-3">
-        <span className="font-data whitespace-nowrap text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-gamify)" }}>
+        <span
+          className="font-data whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide"
+          style={{ background: "var(--color-gamify)", color: "var(--color-bg-elevated)" }}
+        >
           Level {level}
         </span>
         <SignalBar value={pointsIntoLevel} max={pointsForNextLevel} tone="gamify" size="sm" label={`${pointsIntoLevel} of ${pointsForNextLevel} points to level ${level + 1}`} />

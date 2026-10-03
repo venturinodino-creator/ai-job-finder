@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Cv } from "@/generated/prisma/client";
 import type { CvHealth } from "@/lib/searchState";
-import { SignalBar } from "@/components/SignalBar";
+import { RingGauge } from "@/components/RingGauge";
 import { formatRelative } from "@/lib/formatRelative";
 
 const VERDICT: Record<CvHealth["verdict"], { text: string; tone: "secondary" | "accent" }> = {
@@ -19,7 +19,7 @@ const VERDICT: Record<CvHealth["verdict"], { text: string; tone: "secondary" | "
  */
 export function CvHealthCard({ cv, health }: { cv: Cv | null; health: CvHealth | null }) {
   return (
-    <section className="card flex flex-col gap-3" aria-label="CV health">
+    <section className="card flex flex-col gap-3" aria-label="CV health" style={{ boxShadow: "var(--shadow-card)" }}>
       <div className="flex items-baseline justify-between gap-3">
         <p className="eyebrow">CV health</p>
         {cv && (
@@ -49,14 +49,28 @@ export function CvHealthCard({ cv, health }: { cv: Cv | null; health: CvHealth |
         </>
       ) : (
         <>
-          <div className="flex items-center gap-3">
-            <SignalBar value={health.score} tone={VERDICT[health.verdict].tone} label={`CV score ${health.score} of 100`} />
-            <span
-              className="font-data text-xs font-medium uppercase tracking-wide"
-              style={{ color: `var(--color-${VERDICT[health.verdict].tone})` }}
+          <div className="flex items-center gap-4">
+            <RingGauge
+              value={health.score}
+              size={84}
+              stroke={8}
+              color={`var(--color-${VERDICT[health.verdict].tone})`}
+              track="var(--color-border)"
+              label={`CV score ${health.score} of 100`}
             >
-              {VERDICT[health.verdict].text}
-            </span>
+              <span className="font-data text-xl font-semibold leading-none">{health.score}</span>
+            </RingGauge>
+            <div>
+              <p
+                className="font-data text-sm font-semibold uppercase tracking-wide"
+                style={{ color: `var(--color-${VERDICT[health.verdict].tone})` }}
+              >
+                {VERDICT[health.verdict].text}
+              </p>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--color-text-muted)" }}>
+                out of 100
+              </p>
+            </div>
           </div>
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>

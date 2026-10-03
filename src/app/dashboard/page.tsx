@@ -9,6 +9,7 @@ import { CvHealthCard } from "@/components/CvHealthCard";
 import { SetupChecklist } from "@/components/SetupChecklist";
 import { ScoringBanner } from "@/components/ScoringRun";
 import { Pipeline } from "@/components/Pipeline";
+import { OverviewHero } from "@/components/OverviewHero";
 import { Reveal } from "@/components/Reveal";
 import { IngestSourcesPanel } from "@/components/IngestSourcesPanel";
 import { buildSourceStatus } from "@/lib/sourceStatus";
@@ -30,18 +31,13 @@ export default async function DashboardPage() {
     sourceRows.map((r) => ({ key: r.key, enabled: r.enabled, lastFetchedAt: r.lastFetchedAt, lastError: r.lastError, postings: r._count.postings })),
   );
 
-  const caption = profile
-    ? lastScoredAt
-      ? `Last scored ${formatRelative(lastScoredAt)} · ${profile.targetRoles.join(", ") || "no target roles set"}`
-      : profile.targetRoles.join(", ") || "No target roles set yet"
-    : undefined;
+  const scoredCaption = lastScoredAt ? `last scored ${formatRelative(lastScoredAt)}` : undefined;
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="eyebrow">{setup.complete ? "Current search" : "Getting started"}</p>
-        <h1 className="font-display text-3xl font-semibold mt-1">Overview</h1>
-      </div>
+      <Reveal>
+        <OverviewHero pipeline={pipeline} roles={profile?.targetRoles ?? []} scoredCaption={scoredCaption} complete={setup.complete} />
+      </Reveal>
 
       {/* Until the first matches exist, the checklist stands in for the numbers. */}
       {!setup.complete ? (
@@ -51,14 +47,14 @@ export default async function DashboardPage() {
       ) : (
         <>
           {scoring.running && <ScoringBanner hasScores />}
-          <Reveal>
-            <Pipeline counts={pipeline} linkBase="/dashboard/jobs" caption={caption} />
+          <Reveal index={1}>
+            <Pipeline counts={pipeline} linkBase="/dashboard/jobs" />
           </Reveal>
         </>
       )}
 
       {setup.complete && (
-        <Reveal index={1}>
+        <Reveal index={2}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 min-w-0">
               <AttentionFlags flags={flags} />
