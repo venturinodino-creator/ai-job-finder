@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
 import { runIngest } from "@/agents/ingest";
 
+const INGEST_BUDGET_MS = 240_000;
+
 // Alternative to `npm run worker` for platforms with managed HTTP cron.
 // Vercel Cron (see vercel.json) sends a GET request with an
 // `Authorization: Bearer <CRON_SECRET>` header it fills in automatically
@@ -16,8 +18,10 @@ async function handle(req: NextRequest) {
     }
   }
 
-  const summaries = await runIngest();
-  return NextResponse.json({ summaries });
+  // The function may run for 300s (maxDuration below). Stop starting sources
+  // at 240s so the ones in flight can finish; the rest are the stalest next time.
+  const summaries = await runIngest(undefined, { budgetMs: INGEST_BUDGET_MS });
+  return NextResponse.json({ summaries, deferred: summaries.filter((s) => s.deferred).length });
 }
 
 export const GET = handle;

@@ -79,7 +79,7 @@ After that, every push to `main` deploys automatically. Two things worth knowing
 ```
 prisma/schema.prisma      Data model (see BUILD_SPEC.md §3)
 src/agents/                The actual "AI" — ingest, match, cvParse, cvReview, cvTailor, digest
-src/agents/sources/         One file per job source (Remotive, Arbeitnow, RemoteOK, ...)
+src/agents/sources/         One file per job source or board platform (Remotive, We Work Remotely, Greenhouse, ...)
 src/lib/                    Shared infra: db, llm, embeddings, storage, auth
 src/app/api/                Route handlers (auth, profile, cv, jobs, cron)
 src/app/(dashboard pages)   The UI

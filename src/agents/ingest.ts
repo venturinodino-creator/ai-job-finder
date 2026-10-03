@@ -10,36 +10,87 @@ export interface IngestSummary {
   /** Already in the DB from an earlier run; left untouched. */
   existing: number;
   error?: string;
+  /** Not started: the run's time budget was spent first. It goes to the front of the next run. */
+  deferred?: boolean;
+}
+
+export interface IngestOptions {
+  /**
+   * Stop starting new sources this many milliseconds after the run begins.
+   * Sources already running finish. Unset means no limit (the worker process).
+   */
+  budgetMs?: number;
+  /** Gives up on a source whose fetch has not answered by then. Defaults to a minute. */
+  fetchTimeoutMs?: number;
+  /** Clock for the budget; tests pass a fake one. */
+  now?: () => number;
 }
 
 // Sources are independent, so a few fetch/embed/insert pipelines run side by
 // side. Kept modest: the embedding API and the Postgres pool are shared.
 const SOURCE_CONCURRENCY = 4;
 const INSERT_CHUNK_SIZE = 100;
+const DEFAULT_FETCH_TIMEOUT_MS = 60_000;
 
 /**
  * Runs every configured job-source adapter, inserts postings that are new by
  * (sourceId, externalId), and embeds only those. Postings we already hold are
- * left as they are — descriptions rarely change, and with ~30 sources a
+ * left as they are — descriptions rarely change, and with 200+ sources a
  * per-row upsert of everything would blow the cron's time budget.
+ *
+ * Sources are taken stalest-first (never fetched, then longest ago), and with a
+ * `budgetMs` the run stops starting new ones once it is spent, so a cron that
+ * cannot fit every source still gets through all of them over a few days.
  * Intended to run once a day (see src/worker/index.ts, vercel.json).
  */
-export async function runIngest(adapters: JobSourceAdapter[] = jobSourceAdapters): Promise<IngestSummary[]> {
-  const summaries: IngestSummary[] = new Array(adapters.length);
+export async function runIngest(
+  adapters: JobSourceAdapter[] = jobSourceAdapters,
+  options: IngestOptions = {},
+): Promise<IngestSummary[]> {
+  const now = options.now ?? Date.now;
+  const deadline = options.budgetMs === undefined ? Infinity : now() + options.budgetMs;
+  const fetchTimeoutMs = options.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+
+  const queue = await stalestFirst(adapters);
+  const summaries: IngestSummary[] = new Array(queue.length);
   let next = 0;
 
   async function worker() {
-    while (next < adapters.length) {
+    while (next < queue.length) {
       const i = next++;
-      summaries[i] = await ingestOne(adapters[i]);
+      summaries[i] =
+        now() >= deadline
+          ? { source: queue[i].key, fetched: 0, created: 0, existing: 0, deferred: true }
+          : await ingestOne(queue[i], fetchTimeoutMs);
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(SOURCE_CONCURRENCY, adapters.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(SOURCE_CONCURRENCY, queue.length) }, worker));
   return summaries;
 }
 
-async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
+/** Never-fetched sources first, then by how long ago they were last fetched; ties keep their configured order. */
+async function stalestFirst(adapters: JobSourceAdapter[]): Promise<JobSourceAdapter[]> {
+  const rows = await db.jobSource.findMany({
+    where: { key: { in: adapters.map((a) => a.key) } },
+    select: { key: true, lastFetchedAt: true },
+  });
+  const fetchedAt = new Map(rows.map((r: { key: string; lastFetchedAt: Date | null }) => [r.key, r.lastFetchedAt?.getTime() ?? 0]));
+  return adapters
+    .map((adapter, index) => ({ adapter, index, at: fetchedAt.get(adapter.key) ?? 0 }))
+    .sort((a, b) => a.at - b.at || a.index - b.index)
+    .map((entry) => entry.adapter);
+}
+
+function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000) || ms / 1000}s`)), ms);
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function ingestOne(adapter: JobSourceAdapter, fetchTimeoutMs: number): Promise<IngestSummary> {
   const source = await db.jobSource.upsert({
     where: { key: adapter.key },
     create: { key: adapter.key, name: adapter.name, baseUrl: adapter.baseUrl, kind: adapter.kind ?? "PUBLIC_API" },
@@ -48,7 +99,7 @@ async function ingestOne(adapter: JobSourceAdapter): Promise<IngestSummary> {
 
   let postings: NormalizedJobPosting[];
   try {
-    postings = await adapter.fetch();
+    postings = await withTimeout(adapter.fetch(), fetchTimeoutMs, adapter.name);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db.jobSource.update({ where: { id: source.id }, data: { lastError: message } });

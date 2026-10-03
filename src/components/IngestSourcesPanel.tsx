@@ -52,8 +52,10 @@ export function IngestSourcesPanel({ sources }: { sources: SourceStatus[] }) {
     >
       <div className="space-y-4 border-t px-4 py-4" style={{ borderColor: "var(--color-border)" }}>
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-          The ingest agent runs every day at 05:00 UTC, pulls each source below, and embeds new postings for
-          matching. Company boards are read straight from the employer&apos;s own careers page.
+          The ingest agent runs every day at 05:00 UTC, pulls the sources below, and embeds new postings for
+          matching. It starts with the sources that have waited longest, so a source marked &ldquo;Not run
+          yet&rdquo; is picked up first in the next run. Company boards are read straight from the
+          employer&apos;s own careers page.
         </p>
         <SourceGroup title="Job boards" sources={boards} />
         <SourceGroup title={`Company career pages (${companies.length})`} sources={companies} />
