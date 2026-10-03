@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function RefreshMatchesButton() {
+export function RefreshMatchesButton({ onHero = false }: { onHero?: boolean }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -11,7 +11,7 @@ export function RefreshMatchesButton() {
   return (
     <div className="flex items-center gap-3">
       <button
-        className="btn-secondary"
+        className={onHero ? "hero-cta" : "btn-secondary"}
         disabled={loading}
         onClick={async () => {
           setLoading(true);
@@ -32,7 +32,7 @@ export function RefreshMatchesButton() {
       >
         {loading ? "Scoring today's jobs against your profile — usually 1–3 minutes, keep this page open..." : "Refresh matches now"}
       </button>
-      {error && <span className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</span>}
+      {error && <span className="text-sm" style={{ color: onHero ? "#ffb4ab" : "var(--color-danger)" }}>{error}</span>}
     </div>
   );
 }

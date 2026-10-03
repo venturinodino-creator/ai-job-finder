@@ -7,6 +7,8 @@ export interface FeedTab {
   id: string;
   label: string;
   count: number;
+  /** Colours the dot before the label: green for strong, amber for wildcards. */
+  tone?: "secondary" | "gamify" | "accent";
   /** Short line under the tab list explaining what this group is. */
   note?: string;
   content: React.ReactNode;
@@ -56,6 +58,11 @@ export function FeedTabs({ tabs, defaultTab }: { tabs: FeedTab[]; defaultTab?: s
                   />
                 )}
                 <span className="relative flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{ background: tab.tone ? `var(--color-${tab.tone})` : "var(--color-border)", opacity: selected ? 1 : 0.6 }}
+                  />
                   {tab.label}
                   <span
                     className="font-data rounded-full px-1.5 text-[11px] leading-5"

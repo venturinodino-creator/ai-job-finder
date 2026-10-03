@@ -13,6 +13,8 @@ import { postingHref, type PostingOrigin } from "@/lib/postingOrigin";
  */
 export function PostingCard({ posting, origin }: { posting: PostingSummary; origin?: PostingOrigin }) {
   const { reading } = posting;
+  // The card's left edge carries the reading's colour, so a list scans by colour before it is read.
+  const edge = reading ? `var(--color-${readingTone(reading)})` : "var(--color-border)";
   const meta = [
     posting.location ?? "Location n/a",
     posting.remoteType ? posting.remoteType.replace("_", " ").toLowerCase() : null,
@@ -21,8 +23,9 @@ export function PostingCard({ posting, origin }: { posting: PostingSummary; orig
   ].filter(Boolean);
 
   return (
-    <Link href={postingHref(posting.id, origin)} className="card card-link block">
-      <div className="flex items-start justify-between gap-4">
+    <Link href={postingHref(posting.id, origin)} className="card card-link block" style={{ borderLeft: `4px solid ${edge}`, boxShadow: "var(--shadow-card)" }}>
+      <div className="flex items-start gap-4">
+        <Monogram name={posting.company} />
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-medium">
@@ -58,6 +61,23 @@ export function PostingCard({ posting, origin }: { posting: PostingSummary; orig
         )}
       </div>
     </Link>
+  );
+}
+
+const MONOGRAM_COLORS = ["var(--color-accent)", "var(--color-secondary)", "var(--color-gamify)", "var(--chart-cat-1)", "var(--chart-cat-2)"];
+
+/** The company's initial in a tinted square; the tint is stable per company name. */
+function Monogram({ name }: { name: string }) {
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
+  const color = MONOGRAM_COLORS[[...name].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % MONOGRAM_COLORS.length];
+  return (
+    <span
+      aria-hidden
+      className="font-display flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-semibold"
+      style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color, border: `1px solid color-mix(in srgb, ${color} 28%, transparent)` }}
+    >
+      {initial}
+    </span>
   );
 }
 

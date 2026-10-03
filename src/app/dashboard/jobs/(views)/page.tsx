@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireDashboardUserId } from "@/lib/auth";
 import { RefreshMatchesButton } from "@/components/RefreshMatchesButton";
-import { SignalStrip, type SignalReading } from "@/components/SignalStrip";
+import { MatchesHero, type SignalReading } from "@/components/MatchesHero";
 import { FeedTabs, type FeedTab } from "@/components/FeedTabs";
 import { Reveal } from "@/components/Reveal";
 import { PostingCard } from "@/components/PostingCard";
@@ -69,6 +69,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const tabs: FeedTab[] = [
     {
       id: "best",
+      tone: "secondary",
       label: "Best matches",
       count: strong.length,
       note: `Roles scoring ${STRONG_MATCH_MIN}% or higher against your profile and CV.`,
@@ -76,6 +77,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     },
     {
       id: "wildcards",
+      tone: "gamify",
       label: "Wildcards",
       count: wildcards.length,
       note: "Outside your exact targets, but a genuinely strong skills fit — worth a look.",
@@ -92,20 +94,23 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="font-display text-3xl font-semibold">Matches</h1>
-        <RefreshMatchesButton />
-      </div>
+      {!hasMatches && (
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <h1 className="font-display text-3xl font-semibold">Matches</h1>
+          <RefreshMatchesButton />
+        </div>
+      )}
 
       {scoring.running && <ScoringBanner hasScores={hasMatches} />}
 
       {hasMatches ? (
         <Reveal>
-          <SignalStrip
+          <MatchesHero
             readings={readings}
             distribution={distribution}
             strongFrom={STRONG_MATCH_MIN / 10}
             caption={lastRun ? `Last scored ${formatRelative(lastRun)} · ${profile.targetRoles.join(", ") || "no target roles set"}` : ""}
+            action={<RefreshMatchesButton onHero />}
           />
         </Reveal>
       ) : scoring.running ? null : (
